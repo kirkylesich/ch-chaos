@@ -1,0 +1,11 @@
+apiVersion: chaos.io/v1
+kind: ChaosExperiment
+metadata:
+  name: demo-pod-killer
+  namespace: default
+spec:
+  scenario: PodKiller
+  duration: 60
+  targetNamespace: demo
+  parameters:
+    labelSelector: "app=cartservice"

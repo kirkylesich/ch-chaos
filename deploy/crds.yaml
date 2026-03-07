@@ -1,0 +1,237 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: chaosexperiments.chaos.io
+spec:
+  group: chaos.io
+  names:
+    categories: []
+    kind: ChaosExperiment
+    plural: chaosexperiments
+    shortNames:
+    - ce
+    singular: chaosexperiment
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .spec.scenario
+      name: Scenario
+      type: string
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .spec.duration
+      name: Duration
+      type: integer
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for ChaosExperimentSpec via `CustomResource`
+        properties:
+          spec:
+            properties:
+              duration:
+                format: uint64
+                minimum: 0.0
+                type: integer
+              parameters:
+                type: object
+                x-kubernetes-preserve-unknown-fields: true
+              scenario:
+                enum:
+                - PodKiller
+                - CpuStress
+                - NetworkDelay
+                - EdgeDelay
+                - EdgeAbort
+                type: string
+              target:
+                nullable: true
+                properties:
+                  edge:
+                    nullable: true
+                    properties:
+                      destinationService:
+                        type: string
+                      sourceService:
+                        type: string
+                    required:
+                    - destinationService
+                    - sourceService
+                    type: object
+                  namespace:
+                    nullable: true
+                    type: string
+                type: object
+              targetNamespace:
+                nullable: true
+                type: string
+            required:
+            - duration
+            - parameters
+            - scenario
+            type: object
+          status:
+            nullable: true
+            properties:
+              cleanupDone:
+                default: false
+                type: boolean
+              completedAt:
+                nullable: true
+                type: string
+              experimentId:
+                nullable: true
+                type: string
+              message:
+                nullable: true
+                type: string
+              phase:
+                default: Pending
+                enum:
+                - Pending
+                - Running
+                - Succeeded
+                - Failed
+                type: string
+              runnerJobs:
+                items:
+                  type: string
+                type: array
+              startedAt:
+                nullable: true
+                type: string
+            type: object
+        required:
+        - spec
+        title: ChaosExperiment
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: chaosanalysises.chaos.io
+spec:
+  group: chaos.io
+  names:
+    categories: []
+    kind: ChaosAnalysis
+    plural: chaosanalysises
+    shortNames:
+    - ca
+    singular: chaosanalysis
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.verdict
+      name: Verdict
+      type: string
+    - jsonPath: .status.impactScore
+      name: Impact
+      type: integer
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for ChaosAnalysisSpec via `CustomResource`
+        properties:
+          spec:
+            properties:
+              degradationDirection:
+                enum:
+                - up
+                - down
+                type: string
+              experimentRef:
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    nullable: true
+                    type: string
+                required:
+                - name
+                type: object
+              prometheus:
+                properties:
+                  baselineWindow:
+                    type: string
+                  url:
+                    type: string
+                required:
+                - baselineWindow
+                - url
+                type: object
+              query:
+                type: string
+              successCriteria:
+                properties:
+                  maxImpact:
+                    format: uint32
+                    minimum: 0.0
+                    type: integer
+                required:
+                - maxImpact
+                type: object
+            required:
+            - degradationDirection
+            - experimentRef
+            - prometheus
+            - query
+            - successCriteria
+            type: object
+          status:
+            nullable: true
+            properties:
+              baselineValue:
+                format: double
+                nullable: true
+                type: number
+              degradationPercent:
+                format: double
+                nullable: true
+                type: number
+              duringValue:
+                format: double
+                nullable: true
+                type: number
+              impactScore:
+                format: uint32
+                minimum: 0.0
+                nullable: true
+                type: integer
+              message:
+                nullable: true
+                type: string
+              phase:
+                default: Pending
+                enum:
+                - Pending
+                - Completed
+                - Failed
+                type: string
+              verdict:
+                enum:
+                - Pass
+                - Fail
+                - null
+                nullable: true
+                type: string
+            type: object
+        required:
+        - spec
+        title: ChaosAnalysis
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

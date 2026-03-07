@@ -1,0 +1,19 @@
+apiVersion: chaos.io/v1
+kind: ChaosAnalysis
+metadata:
+  name: latency-check
+  namespace: default
+spec:
+  experimentRef:
+    name: pod-killer-test
+    namespace: default
+  prometheus:
+    url: "http://prometheus:9090"
+    baselineWindow: "30m"
+  query: |
+    histogram_quantile(0.99,
+      rate(http_request_duration_seconds_bucket{service="my-app"}[5m])
+    )
+  degradationDirection: up
+  successCriteria:
+    maxImpact: 30

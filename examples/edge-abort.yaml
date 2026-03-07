@@ -1,0 +1,16 @@
+apiVersion: chaos.io/v1
+kind: ChaosExperiment
+metadata:
+  name: payment-ledger-abort
+  namespace: default
+spec:
+  scenario: EdgeAbort
+  duration: 300
+  target:
+    namespace: production
+    edge:
+      sourceService: payment
+      destinationService: ledger
+  parameters:
+    abortPercent: 50
+    abortHttpStatus: 503

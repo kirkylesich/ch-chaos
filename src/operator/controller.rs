@@ -1,0 +1,95 @@
+use std::sync::Arc;
+
+use futures::StreamExt;
+use kube::runtime::controller::{Action, Controller};
+use kube::runtime::watcher;
+use kube::{Api, Client};
+use tokio::time::Duration;
+
+use super::crd::ChaosExperiment;
+use super::graph_builder::{GraphBuilder, GraphBuilderConfig, HttpPrometheusClient};
+use super::kube_client::RealKubeClient;
+use super::reconciler::{self, EdgeResolver, ReconcileResult, ReconcilerConfig};
+use super::types::OperatorError;
+
+use async_trait::async_trait;
+
+pub struct OperatorContext {
+    kube_client: RealKubeClient,
+    edge_resolver: RealEdgeResolver,
+    config: ReconcilerConfig,
+}
+
+struct RealEdgeResolver {
+    graph_builder: GraphBuilder<HttpPrometheusClient>,
+}
+
+#[async_trait]
+impl EdgeResolver for RealEdgeResolver {
+    async fn resolve_edge(
+        &self,
+        source: &str,
+        destination: &str,
+        namespace: &str,
+    ) -> Result<super::types::EdgeInfo, OperatorError> {
+        self.graph_builder
+            .resolve_edge(source, destination, namespace)
+            .await
+    }
+}
+
+async fn reconcile_handler(
+    experiment: Arc<ChaosExperiment>,
+    ctx: Arc<OperatorContext>,
+) -> Result<Action, OperatorError> {
+    let result = reconciler::reconcile(
+        &experiment,
+        &ctx.kube_client,
+        Some(&ctx.edge_resolver as &dyn EdgeResolver),
+        &ctx.config,
+    )
+    .await?;
+
+    match result {
+        ReconcileResult::Requeue(d) => Ok(Action::requeue(d)),
+        ReconcileResult::Done => Ok(Action::await_change()),
+    }
+}
+
+fn error_policy(
+    _experiment: Arc<ChaosExperiment>,
+    error: &OperatorError,
+    _ctx: Arc<OperatorContext>,
+) -> Action {
+    tracing::error!(%error, "reconcile error");
+    Action::requeue(Duration::from_secs(30))
+}
+
+pub async fn run(client: Client, prometheus_url: &str) -> anyhow::Result<()> {
+    let experiments: Api<ChaosExperiment> = Api::all(client.clone());
+
+    let graph_config = GraphBuilderConfig::default();
+    let prom_client = HttpPrometheusClient::new(prometheus_url);
+    let graph_builder = GraphBuilder::new(prom_client, graph_config);
+
+    let ctx = Arc::new(OperatorContext {
+        kube_client: RealKubeClient::new(client),
+        edge_resolver: RealEdgeResolver { graph_builder },
+        config: ReconcilerConfig::default(),
+    });
+
+    tracing::info!("starting ChaosExperiment controller");
+
+    Controller::new(experiments, watcher::Config::default())
+        .shutdown_on_signal()
+        .run(reconcile_handler, error_policy, ctx)
+        .for_each(|res| async move {
+            match res {
+                Ok(o) => tracing::debug!(?o, "reconciled"),
+                Err(e) => tracing::error!(%e, "reconcile failed"),
+            }
+        })
+        .await;
+
+    Ok(())
+}

@@ -1,0 +1,13 @@
+apiVersion: chaos.io/v1
+kind: ChaosExperiment
+metadata:
+  name: network-delay-test
+  namespace: default
+spec:
+  scenario: NetworkDelay
+  duration: 300
+  targetNamespace: production
+  parameters:
+    interface: eth0
+    delayMs: 200
+    jitterMs: 50

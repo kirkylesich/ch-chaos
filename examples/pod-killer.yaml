@@ -1,0 +1,12 @@
+apiVersion: chaos.io/v1
+kind: ChaosExperiment
+metadata:
+  name: pod-killer-test
+  namespace: default
+spec:
+  scenario: PodKiller
+  duration: 300
+  targetNamespace: production
+  parameters:
+    labelSelector: "app=my-app"
+    gracePeriod: 30

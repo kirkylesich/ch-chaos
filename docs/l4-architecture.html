@@ -1,0 +1,322 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Chimp Chaos Operator — L4 Component Architecture</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{background:#fff;font-family:'Segoe UI',system-ui,-apple-system,sans-serif;padding:20px 24px}
+  h1{font-size:20px;font-weight:700;color:#1a1a1a;margin-bottom:4px}
+  .sub{font-size:12px;color:#666;margin-bottom:16px}
+  svg{display:block;width:100%;max-width:1050px;height:auto}
+</style>
+</head>
+<body>
+<h1>Chimp Chaos Operator — L4 Component Architecture</h1>
+<p class="sub">Internal module structure: operator components, runner scenarios, traits, and data flow</p>
+
+<svg viewBox="0 0 960 830">
+<defs>
+  <marker id="a" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#555"/></marker>
+  <marker id="ab" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#3b7ddd"/></marker>
+  <marker id="ag" markerWidth="7" markerHeight="5" refX="6" refY="2.5" orient="auto"><polygon points="0 0,7 2.5,0 5" fill="#16a34a"/></marker>
+  <marker id="al" markerWidth="6" markerHeight="4" refX="5" refY="2" orient="auto"><polygon points="0 0,6 2,0 4" fill="#aaa"/></marker>
+  <filter id="s" x="-2%" y="-3%" width="104%" height="110%"><feDropShadow dx="0" dy="1" stdDeviation="1.5" flood-opacity="0.06"/></filter>
+</defs>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  ROW 0: ENTRYPOINT                     -->
+<!-- ═══════════════════════════════════════ -->
+<g filter="url(#s)">
+  <rect x="370" y="12" width="200" height="36" fill="#f8fafc" stroke="#64748b" stroke-width="1.4" rx="5"/>
+  <text text-anchor="middle" x="470" y="27" font-family="sans-serif" font-size="11" font-weight="600">main.rs</text>
+  <text text-anchor="middle" x="470" y="40" font-family="sans-serif" font-size="8" fill="#666">CLI: --mode operator | runner</text>
+</g>
+
+<!-- main → operator -->
+<line x1="410" y1="48" x2="230" y2="82" stroke="#3b7ddd" stroke-width="1.2" marker-end="url(#ab)"/>
+<text x="300" y="60" font-family="sans-serif" font-size="8" font-weight="500" fill="#3b7ddd" text-anchor="middle">--mode operator</text>
+
+<!-- main → runner -->
+<line x1="530" y1="48" x2="710" y2="82" stroke="#16a34a" stroke-width="1.2" marker-end="url(#ag)"/>
+<text x="640" y="60" font-family="sans-serif" font-size="8" font-weight="500" fill="#16a34a" text-anchor="middle">--mode runner</text>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  OPERATOR BOUNDARY (left half)         -->
+<!-- ═══════════════════════════════════════ -->
+<rect x="20" y="75" width="430" height="570" fill="none" stroke="#3b7ddd" stroke-width="2" stroke-dasharray="10 5" rx="10"/>
+<text x="38" y="94" font-family="sans-serif" font-size="12" font-weight="700" fill="#3b7ddd">src/operator/</text>
+
+
+<!-- ROW 1: controller.rs -->
+<g filter="url(#s)">
+  <rect x="135" y="108" width="200" height="40" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="235" y="124" font-family="sans-serif" font-size="10" font-weight="600" fill="#2563eb">controller.rs</text>
+  <text text-anchor="middle" x="235" y="138" font-family="sans-serif" font-size="8" fill="#666">Controller setup, watcher config</text>
+</g>
+
+<line x1="235" y1="148" x2="235" y2="173" stroke="#555" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="245" y="163" font-family="sans-serif" font-size="7.5" fill="#777">reconcile()</text>
+
+
+<!-- ROW 2: reconciler.rs -->
+<g filter="url(#s)">
+  <rect x="95" y="175" width="280" height="44" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1.4" rx="5"/>
+  <text text-anchor="middle" x="235" y="193" font-family="sans-serif" font-size="11" font-weight="600" fill="#2563eb">reconciler.rs</text>
+  <text text-anchor="middle" x="235" y="208" font-family="sans-serif" font-size="8" fill="#666">validate → inject → monitor → cleanup</text>
+</g>
+
+
+<!-- ROW 3: Two injectors side by side -->
+<line x1="175" y1="219" x2="130" y2="248" stroke="#555" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="132" y="234" font-family="sans-serif" font-size="7.5" fill="#777">Pod/Node</text>
+
+<line x1="295" y1="219" x2="335" y2="248" stroke="#555" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="322" y="234" font-family="sans-serif" font-size="7.5" fill="#777">Edge</text>
+
+<g filter="url(#s)">
+  <rect x="38" y="250" width="175" height="48" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="125" y="268" font-family="sans-serif" font-size="10" font-weight="600" fill="#2563eb">job_builder.rs</text>
+  <text text-anchor="middle" x="125" y="282" font-family="sans-serif" font-size="7.5" fill="#666">RunnerJobInjector</text>
+  <text text-anchor="middle" x="125" y="292" font-family="sans-serif" font-size="7" fill="#888">Job spec, ownerRefs, env vars</text>
+</g>
+
+<g filter="url(#s)">
+  <rect x="248" y="250" width="185" height="48" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="340" y="268" font-family="sans-serif" font-size="10" font-weight="600" fill="#2563eb">istio_injector.rs</text>
+  <text text-anchor="middle" x="340" y="282" font-family="sans-serif" font-size="7.5" fill="#666">IstioEdgeInjector</text>
+  <text text-anchor="middle" x="340" y="292" font-family="sans-serif" font-size="7" fill="#888">VirtualService CRUD, FQDN hosts</text>
+</g>
+
+
+<!-- ROW 4: graph_builder -->
+<line x1="340" y1="298" x2="340" y2="320" stroke="#555" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="350" y="312" font-family="sans-serif" font-size="7.5" fill="#777">pre-flight</text>
+
+<g filter="url(#s)">
+  <rect x="248" y="322" width="185" height="44" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="340" y="340" font-family="sans-serif" font-size="10" font-weight="600" fill="#2563eb">graph_builder.rs</text>
+  <text text-anchor="middle" x="340" y="354" font-family="sans-serif" font-size="7.5" fill="#666">On-demand observed graph (PromQL)</text>
+</g>
+
+
+<!-- ROW 5: crd.rs + types.rs -->
+<g filter="url(#s)">
+  <rect x="38" y="395" width="175" height="44" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="125" y="413" font-family="sans-serif" font-size="10" font-weight="600" fill="#2563eb">crd.rs</text>
+  <text text-anchor="middle" x="125" y="427" font-family="sans-serif" font-size="7.5" fill="#666">ChaosExperiment, ChaosAnalysis</text>
+</g>
+
+<g filter="url(#s)">
+  <rect x="248" y="395" width="185" height="44" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="340" y="413" font-family="sans-serif" font-size="10" font-weight="600" fill="#2563eb">types.rs</text>
+  <text text-anchor="middle" x="340" y="427" font-family="sans-serif" font-size="7.5" fill="#666">ExperimentId, Phase, ScenarioType</text>
+</g>
+
+<!-- Dashed: reconciler uses crd + types -->
+<line x1="185" y1="219" x2="130" y2="393" stroke="#aaa" stroke-width="0.7" fill="none" stroke-dasharray="3 3" marker-end="url(#al)"/>
+<line x1="280" y1="219" x2="330" y2="393" stroke="#aaa" stroke-width="0.7" fill="none" stroke-dasharray="3 3" marker-end="url(#al)"/>
+
+
+<!-- ROW 6: kube_client.rs -->
+<g filter="url(#s)">
+  <rect x="38" y="470" width="175" height="40" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="125" y="488" font-family="sans-serif" font-size="10" font-weight="600" fill="#2563eb">kube_client.rs</text>
+  <text text-anchor="middle" x="125" y="502" font-family="sans-serif" font-size="7.5" fill="#666">KubeClient trait + real impl</text>
+</g>
+
+
+<!-- ROW 7: Traits -->
+<rect x="38" y="535" width="395" height="40" fill="#faf5ff08" stroke="#7c3aed" stroke-width="1" stroke-dasharray="5 3" rx="6"/>
+<text x="50" y="550" font-family="sans-serif" font-size="8" font-weight="700" fill="#7c3aed">Mockable Traits (DI for tests via mockall)</text>
+
+<rect x="50" y="558" width="80" height="14" fill="#ede9fe" stroke="#7c3aed" stroke-width="1" rx="6"/>
+<text text-anchor="middle" x="90" y="568" font-family="monospace" font-size="7.5" font-weight="600" fill="#7c3aed">KubeClient</text>
+
+<rect x="145" y="558" width="105" height="14" fill="#ede9fe" stroke="#7c3aed" stroke-width="1" rx="6"/>
+<text text-anchor="middle" x="197" y="568" font-family="monospace" font-size="7.5" font-weight="600" fill="#7c3aed">PrometheusClient</text>
+
+<rect x="265" y="558" width="80" height="14" fill="#ede9fe" stroke="#7c3aed" stroke-width="1" rx="6"/>
+<text text-anchor="middle" x="305" y="568" font-family="monospace" font-size="7.5" font-weight="600" fill="#7c3aed">IstioClient</text>
+
+
+<!-- ROW 8: External systems -->
+<g filter="url(#s)">
+  <rect x="38" y="610" width="120" height="28" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" rx="4"/>
+  <text text-anchor="middle" x="98" y="628" font-family="sans-serif" font-size="9" font-weight="600" fill="#64748b">Kubernetes API</text>
+</g>
+<g filter="url(#s)">
+  <rect x="175" y="610" width="120" height="28" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" rx="4"/>
+  <text text-anchor="middle" x="235" y="628" font-family="sans-serif" font-size="9" font-weight="600" fill="#64748b">Prometheus</text>
+</g>
+<g filter="url(#s)">
+  <rect x="312" y="610" width="120" height="28" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" rx="4"/>
+  <text text-anchor="middle" x="372" y="628" font-family="sans-serif" font-size="9" font-weight="600" fill="#64748b">Istio Data Plane</text>
+</g>
+
+<!-- Arrows: traits → external -->
+<line x1="90" y1="572" x2="95" y2="608" stroke="#555" stroke-width="0.8" marker-end="url(#a)"/>
+<line x1="197" y1="572" x2="232" y2="608" stroke="#555" stroke-width="0.8" marker-end="url(#a)"/>
+<line x1="305" y1="572" x2="365" y2="608" stroke="#555" stroke-width="0.8" marker-end="url(#a)"/>
+
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  RUNNER BOUNDARY (right half)          -->
+<!-- ═══════════════════════════════════════ -->
+<rect x="485" y="75" width="455" height="440" fill="none" stroke="#16a34a" stroke-width="2" stroke-dasharray="10 5" rx="10"/>
+<text x="503" y="94" font-family="sans-serif" font-size="12" font-weight="700" fill="#16a34a">src/runner/</text>
+
+
+<!-- ROW 1: entry.rs -->
+<g filter="url(#s)">
+  <rect x="612" y="108" width="200" height="40" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="712" y="124" font-family="sans-serif" font-size="10" font-weight="600" fill="#16a34a">entry.rs</text>
+  <text text-anchor="middle" x="712" y="138" font-family="sans-serif" font-size="8" fill="#666">RunnerConfig from env, run()</text>
+</g>
+
+
+<!-- ROW 2: server + metrics side by side -->
+<line x1="660" y1="148" x2="610" y2="173" stroke="#555" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="618" y="161" font-family="sans-serif" font-size="7.5" fill="#777">spawn</text>
+
+<line x1="765" y1="148" x2="820" y2="173" stroke="#555" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="800" y="161" font-family="sans-serif" font-size="7.5" fill="#777">init</text>
+
+<g filter="url(#s)">
+  <rect x="510" y="175" width="155" height="40" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="587" y="191" font-family="sans-serif" font-size="10" font-weight="600" fill="#16a34a">server.rs</text>
+  <text text-anchor="middle" x="587" y="205" font-family="sans-serif" font-size="8" fill="#666">actix-web: /metrics, /health</text>
+</g>
+
+<g filter="url(#s)">
+  <rect x="700" y="175" width="160" height="40" fill="#f0fdf4" stroke="#16a34a" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="780" y="191" font-family="sans-serif" font-size="10" font-weight="600" fill="#16a34a">metrics.rs</text>
+  <text text-anchor="middle" x="780" y="205" font-family="sans-serif" font-size="8" fill="#666">Prometheus registry, gauges</text>
+</g>
+
+<!-- server → metrics -->
+<line x1="665" y1="195" x2="698" y2="195" stroke="#aaa" stroke-width="0.8" fill="none" stroke-dasharray="3 3" marker-end="url(#al)"/>
+
+
+<!-- ROW 3: Scenarios -->
+<line x1="712" y1="148" x2="712" y2="240" stroke="#555" stroke-width="1.1" marker-end="url(#a)"/>
+<text x="722" y="228" font-family="sans-serif" font-size="7.5" fill="#777">dispatch</text>
+
+<!-- scenarios boundary -->
+<rect x="510" y="245" width="410" height="250" fill="none" stroke="#16a34a" stroke-width="1.2" stroke-dasharray="6 4" rx="8"/>
+<text x="525" y="262" font-family="sans-serif" font-size="10" font-weight="700" fill="#16a34a">scenarios/</text>
+
+<!-- Scenario + External: three horizontal rows, each with scenario → external -->
+<!-- pod_killer -->
+<g filter="url(#s)">
+  <rect x="528" y="272" width="170" height="48" fill="#fffbeb" stroke="#d97706" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="613" y="290" font-family="sans-serif" font-size="10" font-weight="600" fill="#b45309">pod_killer.rs</text>
+  <text text-anchor="middle" x="613" y="304" font-family="sans-serif" font-size="7.5" fill="#888">K8s API: delete pods by selector</text>
+</g>
+
+<line x1="698" y1="296" x2="738" y2="296" stroke="#555" stroke-width="1" marker-end="url(#a)"/>
+
+<g filter="url(#s)">
+  <rect x="740" y="280" width="120" height="32" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" rx="4"/>
+  <text text-anchor="middle" x="800" y="299" font-family="sans-serif" font-size="9" font-weight="600" fill="#64748b">K8s API</text>
+</g>
+
+<!-- cpu_stress -->
+<g filter="url(#s)">
+  <rect x="528" y="335" width="170" height="48" fill="#fffbeb" stroke="#d97706" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="613" y="353" font-family="sans-serif" font-size="10" font-weight="600" fill="#b45309">cpu_stress.rs</text>
+  <text text-anchor="middle" x="613" y="367" font-family="sans-serif" font-size="7.5" fill="#888">stress-ng subprocess (privileged)</text>
+</g>
+
+<line x1="698" y1="359" x2="738" y2="359" stroke="#555" stroke-width="1" marker-end="url(#a)"/>
+
+<g filter="url(#s)">
+  <rect x="740" y="343" width="120" height="32" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" rx="4"/>
+  <text text-anchor="middle" x="800" y="362" font-family="sans-serif" font-size="9" font-weight="600" fill="#64748b">stress-ng</text>
+</g>
+
+<!-- network_delay -->
+<g filter="url(#s)">
+  <rect x="528" y="398" width="170" height="48" fill="#fffbeb" stroke="#d97706" stroke-width="1.3" rx="5"/>
+  <text text-anchor="middle" x="613" y="416" font-family="sans-serif" font-size="10" font-weight="600" fill="#b45309">network_delay.rs</text>
+  <text text-anchor="middle" x="613" y="430" font-family="sans-serif" font-size="7.5" fill="#888">tc qdisc netem (NET_ADMIN)</text>
+</g>
+
+<line x1="698" y1="422" x2="738" y2="422" stroke="#555" stroke-width="1" marker-end="url(#a)"/>
+
+<g filter="url(#s)">
+  <rect x="740" y="406" width="120" height="32" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="4 3" rx="4"/>
+  <text text-anchor="middle" x="800" y="425" font-family="sans-serif" font-size="9" font-weight="600" fill="#64748b">tc (iproute2)</text>
+</g>
+
+
+<!-- ═══════════════════════════════════════ -->
+<!--  BOTTOM: LIFECYCLE + LEGEND            -->
+<!-- ═══════════════════════════════════════ -->
+
+<!-- Phase transitions -->
+<g transform="translate(485,560)">
+  <rect x="0" y="0" width="455" height="78" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="5"/>
+  <text x="14" y="16" font-family="sans-serif" font-size="9" font-weight="700" fill="#333">EXPERIMENT LIFECYCLE (Phase transitions)</text>
+
+  <g transform="translate(30,35)">
+    <rect x="0" y="0" width="60" height="22" fill="#e2e8f0" stroke="#94a3b8" stroke-width="1" rx="4"/>
+    <text text-anchor="middle" x="30" y="14" font-family="monospace" font-size="8.5" fill="#334155">Pending</text>
+
+    <line x1="62" y1="11" x2="88" y2="11" stroke="#555" stroke-width="1" marker-end="url(#a)"/>
+
+    <rect x="90" y="0" width="65" height="22" fill="#dbeafe" stroke="#3b82f6" stroke-width="1" rx="4"/>
+    <text text-anchor="middle" x="122" y="14" font-family="monospace" font-size="8.5" fill="#1e40af">Running</text>
+
+    <line x1="157" y1="4" x2="195" y2="-8" stroke="#555" stroke-width="1" marker-end="url(#a)"/>
+    <line x1="157" y1="18" x2="195" y2="30" stroke="#555" stroke-width="1" marker-end="url(#a)"/>
+
+    <rect x="197" y="-16" width="80" height="22" fill="#dcfce7" stroke="#16a34a" stroke-width="1" rx="4"/>
+    <text text-anchor="middle" x="237" y="-3" font-family="monospace" font-size="8.5" fill="#166534">Succeeded</text>
+
+    <rect x="197" y="22" width="58" height="22" fill="#fee2e2" stroke="#dc2626" stroke-width="1" rx="4"/>
+    <text text-anchor="middle" x="226" y="36" font-family="monospace" font-size="8.5" fill="#991b1b">Failed</text>
+
+    <path d="M 30,22 Q 30,50 214,44" stroke="#dc2626" stroke-width="0.8" fill="none" stroke-dasharray="3 2" marker-end="url(#a)"/>
+    <text x="110" y="52" font-family="sans-serif" font-size="7" fill="#dc2626">validation error</text>
+  </g>
+</g>
+
+<!-- Operator → Runner note -->
+<g transform="translate(485,650)">
+  <rect x="0" y="0" width="455" height="42" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="5"/>
+  <text x="14" y="15" font-family="sans-serif" font-size="9" font-weight="700" fill="#333">OPERATOR → RUNNER RELATIONSHIP</text>
+  <text x="14" y="29" font-family="sans-serif" font-size="8" fill="#555">Operator creates K8s Jobs with --mode runner. Runner pods are ephemeral.</text>
+  <text x="14" y="39" font-family="sans-serif" font-size="7.5" fill="#999">Operator monitors Jobs via K8s API (NOT Prometheus). ownerReferences for GC.</text>
+</g>
+
+<!-- Legend -->
+<g transform="translate(485,705)">
+  <rect x="0" y="0" width="455" height="55" fill="#fafbfc" stroke="#ddd" stroke-width="1" rx="5"/>
+  <text x="14" y="15" font-family="sans-serif" font-size="9" font-weight="700" fill="#333">LEGEND</text>
+
+  <rect x="14" y="26" width="18" height="11" fill="#eef4ff" stroke="#3b7ddd" stroke-width="1" rx="3"/>
+  <text x="38" y="35" font-family="sans-serif" font-size="8" fill="#555">Operator module</text>
+
+  <rect x="130" y="26" width="18" height="11" fill="#f0fdf4" stroke="#16a34a" stroke-width="1" rx="3"/>
+  <text x="154" y="35" font-family="sans-serif" font-size="8" fill="#555">Runner module</text>
+
+  <rect x="230" y="26" width="18" height="11" fill="#fffbeb" stroke="#d97706" stroke-width="1" rx="3"/>
+  <text x="254" y="35" font-family="sans-serif" font-size="8" fill="#555">Scenario</text>
+
+  <rect x="302" y="26" width="18" height="11" fill="#f1f5f9" stroke="#94a3b8" stroke-width="1" stroke-dasharray="3 2" rx="3"/>
+  <text x="326" y="35" font-family="sans-serif" font-size="8" fill="#555">External</text>
+
+  <rect x="380" y="25" width="18" height="13" fill="#ede9fe" stroke="#7c3aed" stroke-width="1" rx="6"/>
+  <text x="404" y="36" font-family="sans-serif" font-size="8" fill="#555">Trait</text>
+
+  <text x="14" y="49" font-family="sans-serif" font-size="7" fill="#999">Dashed lines = dependency / uses. Solid lines = calls / creates.</text>
+</g>
+
+</svg>
+</body>
+</html>

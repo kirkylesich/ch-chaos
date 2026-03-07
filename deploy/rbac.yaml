@@ -1,0 +1,84 @@
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chimp-chaos-operator
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chimp-chaos-operator
+rules:
+  # ChaosExperiment CRD
+  - apiGroups: ["chaos.io"]
+    resources: ["chaosexperiments"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["chaos.io"]
+    resources: ["chaosexperiments/status"]
+    verbs: ["get", "patch"]
+  # ChaosAnalysis CRD
+  - apiGroups: ["chaos.io"]
+    resources: ["chaosanalysises"]
+    verbs: ["get", "list", "watch", "patch"]
+  - apiGroups: ["chaos.io"]
+    resources: ["chaosanalysises/status"]
+    verbs: ["get", "patch"]
+  # Jobs (create runner pods)
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+  # Pods (list target nodes)
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list"]
+  # Services (resolve source workload labels for edge chaos)
+  - apiGroups: [""]
+    resources: ["services"]
+    verbs: ["get", "list"]
+  # Istio VirtualServices (edge chaos)
+  - apiGroups: ["networking.istio.io"]
+    resources: ["virtualservices"]
+    verbs: ["create", "get", "list", "watch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chimp-chaos-operator
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chimp-chaos-operator
+subjects:
+  - kind: ServiceAccount
+    name: chimp-chaos-operator
+    namespace: default
+---
+# Runner ServiceAccount (used by runner Job pods)
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: chimp-chaos-runner
+  namespace: default
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: chimp-chaos-runner
+rules:
+  # PodKiller scenario
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: chimp-chaos-runner
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: chimp-chaos-runner
+subjects:
+  - kind: ServiceAccount
+    name: chimp-chaos-runner
+    namespace: default

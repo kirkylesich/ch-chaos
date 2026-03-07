@@ -1,0 +1,43 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: chimp-chaos-operator
+  namespace: default
+  labels:
+    app: chimp-chaos-operator
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: chimp-chaos-operator
+  template:
+    metadata:
+      labels:
+        app: chimp-chaos-operator
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+    spec:
+      serviceAccountName: chimp-chaos-operator
+      containers:
+        - name: operator
+          image: chimp-chaos:latest
+          imagePullPolicy: IfNotPresent
+          args: ["--mode", "operator"]
+          env:
+            - name: RUST_LOG
+              value: "info"
+            - name: PROMETHEUS_URL
+              value: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+            - name: RUNNER_IMAGE
+              value: "chimp-chaos:latest"
+          ports:
+            - containerPort: 8080
+              name: metrics
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi

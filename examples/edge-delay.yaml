@@ -1,0 +1,15 @@
+apiVersion: chaos.io/v1
+kind: ChaosExperiment
+metadata:
+  name: payment-ledger-delay
+  namespace: default
+spec:
+  scenario: EdgeDelay
+  duration: 600
+  target:
+    namespace: production
+    edge:
+      sourceService: payment
+      destinationService: ledger
+  parameters:
+    latencyMs: 200

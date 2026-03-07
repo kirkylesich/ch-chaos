@@ -1,0 +1,15 @@
+apiVersion: chaos.io/v1
+kind: ChaosExperiment
+metadata:
+  name: frontend-productcatalog-delay
+  namespace: default
+spec:
+  scenario: EdgeDelay
+  duration: 120
+  target:
+    namespace: demo
+    edge:
+      sourceService: frontend
+      destinationService: productcatalogservice
+  parameters:
+    latencyMs: 500
