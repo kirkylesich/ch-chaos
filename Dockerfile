@@ -19,7 +19,7 @@ RUN mkdir -p src/bin src/operator src/runner/scenarios && \
     echo "fn main() {}" > src/bin/crd_gen.rs
 
 RUN cargo build --release 2>/dev/null || true
-RUN rm -rf src/
+RUN rm -rf src/ target/release/chimp-chaos target/release/crd_gen target/release/deps/chimp_chaos* target/release/.fingerprint/chimp-chaos-*
 
 # 2. Copy real source and build
 COPY src/ src/

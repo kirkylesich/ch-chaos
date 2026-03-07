@@ -72,10 +72,15 @@ pub async fn run(client: Client, prometheus_url: &str) -> anyhow::Result<()> {
     let prom_client = HttpPrometheusClient::new(prometheus_url);
     let graph_builder = GraphBuilder::new(prom_client, graph_config);
 
+    let mut config = ReconcilerConfig::default();
+    if let Ok(image) = std::env::var("RUNNER_IMAGE") {
+        config.job_builder.runner_image = image;
+    }
+
     let ctx = Arc::new(OperatorContext {
         kube_client: RealKubeClient::new(client),
         edge_resolver: RealEdgeResolver { graph_builder },
-        config: ReconcilerConfig::default(),
+        config,
     });
 
     tracing::info!("starting ChaosExperiment controller");

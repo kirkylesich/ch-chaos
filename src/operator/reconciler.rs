@@ -273,7 +273,17 @@ async fn handle_pending_pod(
         return patch_failed(kube, ns, name, &ValidationError::NoTargetNodes.to_string()).await;
     }
 
-    let params_json = experiment.spec.parameters.as_ref().map(|p| p.to_string());
+    let params_json = {
+        let mut params = experiment
+            .spec
+            .parameters
+            .clone()
+            .unwrap_or(serde_json::json!({}));
+        if let Some(obj) = params.as_object_mut() {
+            obj.entry("namespace").or_insert_with(|| serde_json::json!(target_ns));
+        }
+        Some(params.to_string())
+    };
     let mut job_names = Vec::new();
 
     for node in &nodes {

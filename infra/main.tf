@@ -18,12 +18,20 @@ terraform {
       source  = "hashicorp/random"
       version = ">= 3.6"
     }
+    github = {
+      source  = "integrations/github"
+      version = "~> 6.0"
+    }
   }
 }
 
 provider "aws" {
   region  = "eu-central-1"
   profile = "kirill"
+}
+
+provider "github" {
+  owner = "kirkylesich"
 }
 
 data "aws_availability_zones" "this" {
@@ -357,6 +365,82 @@ resource "aws_ecr_repository" "chimp_chaos" {
   image_scanning_configuration {
     scan_on_push = false
   }
+}
+
+# ── GitHub Actions OIDC → ECR ──
+
+data "aws_caller_identity" "this" {}
+
+resource "aws_iam_openid_connect_provider" "github" {
+  url             = "https://token.actions.githubusercontent.com"
+  client_id_list  = ["sts.amazonaws.com"]
+  thumbprint_list = ["ffffffffffffffffffffffffffffffffffffffff"]
+}
+
+resource "aws_iam_role" "github_actions_ecr" {
+  name = "github-actions-ecr"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [{
+      Effect = "Allow"
+      Principal = {
+        Federated = aws_iam_openid_connect_provider.github.arn
+      }
+      Action = "sts:AssumeRoleWithWebIdentity"
+      Condition = {
+        StringEquals = {
+          "token.actions.githubusercontent.com:aud" = "sts.amazonaws.com"
+        }
+        StringLike = {
+          "token.actions.githubusercontent.com:sub" = "repo:kirkylesich/ch-chaos:*"
+        }
+      }
+    }]
+  })
+}
+
+resource "aws_iam_role_policy" "github_actions_ecr" {
+  name = "ecr-push"
+  role = aws_iam_role.github_actions_ecr.id
+
+  policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Effect   = "Allow"
+        Action   = "ecr:GetAuthorizationToken"
+        Resource = "*"
+      },
+      {
+        Effect = "Allow"
+        Action = [
+          "ecr:BatchCheckLayerAvailability",
+          "ecr:GetDownloadUrlForLayer",
+          "ecr:BatchGetImage",
+          "ecr:PutImage",
+          "ecr:InitiateLayerUpload",
+          "ecr:UploadLayerPart",
+          "ecr:CompleteLayerUpload",
+        ]
+        Resource = aws_ecr_repository.chimp_chaos.arn
+      },
+    ]
+  })
+}
+
+# ── GitHub Actions Variables (auto-sync) ──
+
+resource "github_actions_variable" "aws_role_arn" {
+  repository    = "ch-chaos"
+  variable_name = "AWS_ROLE_ARN"
+  value         = aws_iam_role.github_actions_ecr.arn
+}
+
+resource "github_actions_variable" "aws_region" {
+  repository    = "ch-chaos"
+  variable_name = "AWS_REGION"
+  value         = "eu-central-1"
 }
 
 # ── Outputs ──
