@@ -1,0 +1,27 @@
+# Rust
+target/
+**/*.rs.bk
+
+# Terraform
+infra/.terraform/
+infra/*.tfstate
+infra/*.tfstate.backup
+infra/*.tfvars
+infra/.terraform.lock.hcl
+
+# Secrets / env
+.env
+.env.*
+*.pem
+*.key
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

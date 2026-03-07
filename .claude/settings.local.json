@@ -1,0 +1,28 @@
+{
+  "permissions": {
+    "allow": [
+      "mcp__context7__resolve-library-id",
+      "mcp__context7__query-docs",
+      "Bash(mkdir:*)",
+      "WebSearch",
+      "Bash(cargo check:*)",
+      "Bash(cargo test:*)",
+      "Bash(cargo clippy:*)",
+      "Bash(chmod +x:*)",
+      "Bash(terraform:*)",
+      "WebFetch(domain:raw.githubusercontent.com)",
+      "Bash(docker build:*)",
+      "Bash(rustc:*)",
+      "Bash(docker push:*)",
+      "Bash(kubectl apply:*)",
+      "Bash(cargo run:*)",
+      "Bash(grep:*)",
+      "Bash(kubectl rollout:*)",
+      "Bash(kubectl set:*)",
+      "Bash(kubectl logs:*)",
+      "Bash(kubectl delete:*)",
+      "Bash(aws ecr:*)",
+      "Bash(git:*)"
+    ]
+  }
+}
