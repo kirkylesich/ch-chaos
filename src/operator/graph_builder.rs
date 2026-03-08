@@ -3,6 +3,7 @@ use std::collections::BTreeMap;
 use async_trait::async_trait;
 use serde::Deserialize;
 
+use super::analysis_reconciler::AnalysisPrometheusClient;
 use super::types::{EdgeInfo, OperatorError, DEFAULT_GRAPH_LOOKBACK, DEFAULT_GRAPH_MIN_RPS};
 
 // ── Prometheus client trait (for mocking) ──
@@ -85,6 +86,36 @@ impl PrometheusClient for HttpPrometheusClient {
         }
 
         Ok(PrometheusQueryResult { data: resp.data })
+    }
+}
+
+#[async_trait]
+impl AnalysisPrometheusClient for HttpPrometheusClient {
+    async fn query_at(&self, promql: &str, time: &str) -> Result<f64, OperatorError> {
+        let url = format!("{}/api/v1/query", self.base_url);
+        let resp: PrometheusApiResponse = self
+            .client
+            .get(&url)
+            .query(&[("query", promql), ("time", time)])
+            .send()
+            .await
+            .map_err(|e| OperatorError::Prometheus(e.to_string()))?
+            .json()
+            .await
+            .map_err(|e| OperatorError::Prometheus(e.to_string()))?;
+
+        if resp.status != "success" {
+            return Err(OperatorError::Prometheus(format!(
+                "prometheus returned status: {}",
+                resp.status
+            )));
+        }
+
+        resp.data
+            .result
+            .first()
+            .map(|m| m.value.1.parse::<f64>().unwrap_or(0.0))
+            .ok_or_else(|| OperatorError::Prometheus("empty query result".into()))
     }
 }
 

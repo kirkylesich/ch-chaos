@@ -212,6 +212,9 @@ pub enum OperatorError {
 
     #[error("serialization error: {0}")]
     Serialization(#[from] serde_json::Error),
+
+    #[error("analysis error: {0}")]
+    Analysis(String),
 }
 
 #[derive(Debug, Error)]

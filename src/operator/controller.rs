@@ -6,13 +6,16 @@ use kube::runtime::watcher;
 use kube::{Api, Client};
 use tokio::time::Duration;
 
-use super::crd::ChaosExperiment;
+use super::analysis_reconciler;
+use super::crd::{ChaosAnalysis, ChaosExperiment};
 use super::graph_builder::{GraphBuilder, GraphBuilderConfig, HttpPrometheusClient};
 use super::kube_client::RealKubeClient;
 use super::reconciler::{self, EdgeResolver, ReconcileResult, ReconcilerConfig};
 use super::types::OperatorError;
 
 use async_trait::async_trait;
+
+// ── Experiment controller context ──
 
 pub struct OperatorContext {
     kube_client: RealKubeClient,
@@ -65,8 +68,35 @@ fn error_policy(
     Action::requeue(Duration::from_secs(30))
 }
 
+// ── Analysis controller context ──
+
+struct AnalysisContext {
+    kube_client: RealKubeClient,
+    prom_client: HttpPrometheusClient,
+}
+
+async fn reconcile_analysis_handler(
+    analysis: Arc<ChaosAnalysis>,
+    ctx: Arc<AnalysisContext>,
+) -> Result<Action, OperatorError> {
+    analysis_reconciler::reconcile_analysis(&analysis, &ctx.kube_client, &ctx.prom_client).await?;
+    Ok(Action::requeue(Duration::from_secs(300)))
+}
+
+fn analysis_error_policy(
+    _analysis: Arc<ChaosAnalysis>,
+    error: &OperatorError,
+    _ctx: Arc<AnalysisContext>,
+) -> Action {
+    tracing::error!(%error, "analysis reconcile error");
+    Action::requeue(Duration::from_secs(30))
+}
+
+// ── Run both controllers ──
+
 pub async fn run(client: Client, prometheus_url: &str) -> anyhow::Result<()> {
     let experiments: Api<ChaosExperiment> = Api::all(client.clone());
+    let analyses: Api<ChaosAnalysis> = Api::all(client.clone());
 
     let graph_config = GraphBuilderConfig::default();
     let prom_client = HttpPrometheusClient::new(prometheus_url);
@@ -77,24 +107,44 @@ pub async fn run(client: Client, prometheus_url: &str) -> anyhow::Result<()> {
         config.job_builder.runner_image = image;
     }
 
-    let ctx = Arc::new(OperatorContext {
-        kube_client: RealKubeClient::new(client),
+    let exp_ctx = Arc::new(OperatorContext {
+        kube_client: RealKubeClient::new(client.clone()),
         edge_resolver: RealEdgeResolver { graph_builder },
         config,
     });
 
-    tracing::info!("starting ChaosExperiment controller");
+    let analysis_ctx = Arc::new(AnalysisContext {
+        kube_client: RealKubeClient::new(client.clone()),
+        prom_client: HttpPrometheusClient::new(prometheus_url),
+    });
 
-    Controller::new(experiments, watcher::Config::default())
+    tracing::info!("starting ChaosExperiment controller");
+    let exp_controller = Controller::new(experiments, watcher::Config::default())
         .shutdown_on_signal()
-        .run(reconcile_handler, error_policy, ctx)
+        .run(reconcile_handler, error_policy, exp_ctx)
         .for_each(|res| async move {
             match res {
-                Ok(o) => tracing::debug!(?o, "reconciled"),
-                Err(e) => tracing::error!(%e, "reconcile failed"),
+                Ok(o) => tracing::debug!(?o, "experiment reconciled"),
+                Err(e) => tracing::error!(%e, "experiment reconcile failed"),
             }
-        })
-        .await;
+        });
+
+    tracing::info!("starting ChaosAnalysis controller");
+    let analysis_controller = Controller::new(analyses, watcher::Config::default())
+        .shutdown_on_signal()
+        .run(
+            reconcile_analysis_handler,
+            analysis_error_policy,
+            analysis_ctx,
+        )
+        .for_each(|res| async move {
+            match res {
+                Ok(o) => tracing::debug!(?o, "analysis reconciled"),
+                Err(e) => tracing::error!(%e, "analysis reconcile failed"),
+            }
+        });
+
+    tokio::join!(exp_controller, analysis_controller);
 
     Ok(())
 }

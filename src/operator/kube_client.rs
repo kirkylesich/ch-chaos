@@ -7,7 +7,8 @@ use kube::api::{Api, DynamicObject, ListParams, Patch, PatchParams, PostParams};
 use kube::{Client, ResourceExt};
 use serde_json::json;
 
-use super::crd::{ChaosExperiment, ChaosExperimentStatus};
+use super::analysis_reconciler::AnalysisKubeClient;
+use super::crd::{ChaosAnalysis, ChaosAnalysisStatus, ChaosExperiment, ChaosExperimentStatus};
 use super::reconciler::{KubeClient, VirtualServiceInfo};
 use super::types::{OperatorError, FINALIZER_NAME};
 
@@ -151,6 +152,34 @@ impl KubeClient for RealKubeClient {
             }
         });
         api.patch(name, &PatchParams::apply("chimp-chaos"), &Patch::Merge(&patch))
+            .await?;
+        Ok(())
+    }
+}
+
+// ── AnalysisKubeClient impl ──
+
+#[async_trait]
+impl AnalysisKubeClient for RealKubeClient {
+    async fn get_experiment_status(
+        &self,
+        ns: &str,
+        name: &str,
+    ) -> Result<ChaosExperimentStatus, OperatorError> {
+        let api: Api<ChaosExperiment> = Api::namespaced(self.client.clone(), ns);
+        let exp = api.get(name).await?;
+        Ok(exp.status.unwrap_or_default())
+    }
+
+    async fn patch_analysis_status(
+        &self,
+        ns: &str,
+        name: &str,
+        status: &ChaosAnalysisStatus,
+    ) -> Result<(), OperatorError> {
+        let api: Api<ChaosAnalysis> = Api::namespaced(self.client.clone(), ns);
+        let patch = json!({ "status": status });
+        api.patch_status(name, &PatchParams::apply("chimp-chaos"), &Patch::Merge(&patch))
             .await?;
         Ok(())
     }

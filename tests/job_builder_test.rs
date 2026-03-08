@@ -42,6 +42,60 @@ fn job_name_format() {
 }
 
 #[test]
+fn job_name_truncated_for_long_eks_node_names() {
+    let exp = make_experiment("test", "default", ScenarioType::PodKiller);
+    let long_node = "ip-10-0-34-50.eu-central-1.compute.internal";
+    let job = build_runner_job(
+        &exp,
+        "550e8400-e29b-41d4-a716-446655440000",
+        long_node,
+        ScenarioType::PodKiller,
+        300,
+        None,
+        &JobBuilderConfig::default(),
+    );
+
+    let name = job.metadata.name.as_deref().unwrap();
+    assert!(
+        name.len() <= 63,
+        "job name '{}' is {} chars, must be <= 63",
+        name,
+        name.len()
+    );
+    assert!(name.starts_with("chaos-runner-550e8400-"));
+}
+
+#[test]
+fn job_name_max_length_with_various_node_names() {
+    let exp = make_experiment("test", "default", ScenarioType::PodKiller);
+    let node_names = [
+        "ip-10-0-34-50.eu-central-1.compute.internal",
+        "ip-192-168-100-200.us-west-2.compute.internal",
+        "gke-my-cluster-default-pool-abcdef01-xyz1",
+        "short",
+    ];
+    for node in &node_names {
+        let job = build_runner_job(
+            &exp,
+            "abcdef12-3456-7890-abcd-ef1234567890",
+            node,
+            ScenarioType::PodKiller,
+            300,
+            None,
+            &JobBuilderConfig::default(),
+        );
+        let name = job.metadata.name.as_deref().unwrap();
+        assert!(
+            name.len() <= 63,
+            "job name '{}' ({} chars) exceeds 63 for node '{}'",
+            name,
+            name.len(),
+            node
+        );
+    }
+}
+
+#[test]
 fn job_namespace_matches_experiment() {
     let exp = make_experiment("test", "production", ScenarioType::CpuStress);
     let job = build_runner_job(

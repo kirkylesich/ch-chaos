@@ -12,6 +12,46 @@ fn crd_generates_valid_experiment_schema() {
 }
 
 #[test]
+fn crd_parameters_field_has_type() {
+    // K8s rejects OpenAPI schemas where object properties have no 'type'.
+    // serde_json::Value without a custom schema generates a typeless field.
+    let crd = ChaosExperiment::crd();
+    let yaml = serde_yaml::to_string(&crd).unwrap();
+    let doc: serde_json::Value = serde_yaml::from_str(&yaml).unwrap();
+
+    let parameters_schema = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+        ["properties"]["spec"]["properties"]["parameters"];
+
+    assert_eq!(
+        parameters_schema.get("type").and_then(|t| t.as_str()),
+        Some("object"),
+        "parameters field must have type 'object' for K8s CRD validation"
+    );
+}
+
+#[test]
+fn crd_all_spec_properties_have_type() {
+    // Ensure every property in the CRD spec has a 'type' field,
+    // which is required by Kubernetes structural schema validation.
+    let crd = ChaosExperiment::crd();
+    let yaml = serde_yaml::to_string(&crd).unwrap();
+    let doc: serde_json::Value = serde_yaml::from_str(&yaml).unwrap();
+
+    let props = doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
+        ["properties"]["spec"]["properties"]
+        .as_object()
+        .expect("spec properties should be an object");
+
+    for (name, schema) in props {
+        assert!(
+            schema.get("type").is_some() || schema.get("$ref").is_some() || schema.get("allOf").is_some(),
+            "spec property '{}' has no 'type' — K8s will reject this CRD",
+            name,
+        );
+    }
+}
+
+#[test]
 fn crd_generates_valid_analysis_schema() {
     let crd = ChaosAnalysis::crd();
     assert_eq!(

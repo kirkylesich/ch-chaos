@@ -21,8 +21,8 @@ spec:
       serviceAccountName: chimp-chaos-operator
       containers:
         - name: operator
-          image: chimp-chaos:latest
-          imagePullPolicy: IfNotPresent
+          image: 381509085286.dkr.ecr.eu-central-1.amazonaws.com/chimp-chaos:latest
+          imagePullPolicy: Always
           args: ["--mode", "operator"]
           env:
             - name: RUST_LOG
@@ -30,7 +30,7 @@ spec:
             - name: PROMETHEUS_URL
               value: "http://kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
             - name: RUNNER_IMAGE
-              value: "chimp-chaos:latest"
+              value: "381509085286.dkr.ecr.eu-central-1.amazonaws.com/chimp-chaos:latest"
           ports:
             - containerPort: 8080
               name: metrics

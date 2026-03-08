@@ -3,15 +3,15 @@ use prometheus::{Encoder, Registry, TextEncoder};
 
 use crate::operator::types::RunnerError;
 
-struct AppState {
-    registry: Registry,
+pub struct AppState {
+    pub registry: Registry,
 }
 
-async fn health() -> HttpResponse {
+pub async fn health() -> HttpResponse {
     HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
 }
 
-async fn metrics(data: web::Data<AppState>) -> HttpResponse {
+pub async fn metrics(data: web::Data<AppState>) -> HttpResponse {
     let encoder = TextEncoder::new();
     let metric_families = data.registry.gather();
     let mut buffer = Vec::new();

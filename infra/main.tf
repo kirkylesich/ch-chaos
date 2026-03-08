@@ -306,7 +306,7 @@ resource "helm_release" "kube_prometheus_stack" {
               operator: Exists
         podMetricsEndpoints:
           - path: /stats/prometheus
-            port: http-envoy-prom
+            targetPort: 15090
             interval: 15s
             scrapeTimeout: 10s
             relabelings:
@@ -353,6 +353,46 @@ resource "null_resource" "online_boutique" {
   }
 
   depends_on = [kubernetes_namespace_v1.demo, helm_release.istiod]
+}
+
+# ── Chaos Runner RBAC ──
+
+resource "kubernetes_service_account_v1" "chaos_runner" {
+  metadata {
+    name      = "chimp-chaos-runner"
+    namespace = kubernetes_namespace_v1.demo.metadata[0].name
+  }
+  depends_on = [kubernetes_namespace_v1.demo]
+}
+
+resource "kubernetes_role_v1" "chaos_runner" {
+  metadata {
+    name      = "chimp-chaos-runner"
+    namespace = kubernetes_namespace_v1.demo.metadata[0].name
+  }
+  rule {
+    api_groups = [""]
+    resources  = ["pods"]
+    verbs      = ["get", "list", "delete"]
+  }
+  depends_on = [kubernetes_namespace_v1.demo]
+}
+
+resource "kubernetes_role_binding_v1" "chaos_runner" {
+  metadata {
+    name      = "chimp-chaos-runner"
+    namespace = kubernetes_namespace_v1.demo.metadata[0].name
+  }
+  role_ref {
+    api_group = "rbac.authorization.k8s.io"
+    kind      = "Role"
+    name      = kubernetes_role_v1.chaos_runner.metadata[0].name
+  }
+  subject {
+    kind      = "ServiceAccount"
+    name      = kubernetes_service_account_v1.chaos_runner.metadata[0].name
+    namespace = kubernetes_namespace_v1.demo.metadata[0].name
+  }
 }
 
 # ── ECR repository for chimp-chaos ──

@@ -27,10 +27,17 @@ enum Call {
     DeleteVirtualService(String, String),
 }
 
+#[derive(Debug, Clone)]
+struct CreatedJob {
+    name: String,
+    env_vars: std::collections::HashMap<String, String>,
+}
+
 // ── Mock KubeClient ──
 
 struct MockKube {
     calls: Mutex<Vec<Call>>,
+    created_jobs: Mutex<Vec<CreatedJob>>,
     target_nodes: Vec<String>,
     service_selector: Result<BTreeMap<String, String>, OperatorError>,
     existing_vs: Vec<VirtualServiceInfo>,
@@ -41,6 +48,7 @@ impl MockKube {
     fn new() -> Self {
         Self {
             calls: Mutex::new(vec![]),
+            created_jobs: Mutex::new(vec![]),
             target_nodes: vec!["node-1".to_string()],
             service_selector: Ok(BTreeMap::from([("app".into(), "payment".into())])),
             existing_vs: vec![],
@@ -92,7 +100,23 @@ impl MockKube {
 impl KubeClient for MockKube {
     async fn create_job(&self, ns: &str, job: &Job) -> Result<(), OperatorError> {
         let name = job.metadata.name.clone().unwrap_or_default();
-        self.calls.lock().unwrap().push(Call::CreateJob(name));
+        self.calls.lock().unwrap().push(Call::CreateJob(name.clone()));
+        let env_vars: std::collections::HashMap<String, String> = job
+            .spec
+            .as_ref()
+            .and_then(|s| s.template.spec.as_ref())
+            .and_then(|ps| ps.containers.first())
+            .and_then(|c| c.env.as_ref())
+            .map(|envs| {
+                envs.iter()
+                    .filter_map(|e| e.value.as_ref().map(|v| (e.name.clone(), v.clone())))
+                    .collect()
+            })
+            .unwrap_or_default();
+        self.created_jobs
+            .lock()
+            .unwrap()
+            .push(CreatedJob { name, env_vars });
         let _ = ns;
         Ok(())
     }
@@ -767,4 +791,97 @@ async fn reconcile_deletion_edge_deletes_vs() {
         .iter()
         .any(|c| matches!(c, Call::DeleteVirtualService(_, _))));
     assert!(kube.has_call(&Call::RemoveFinalizer("default".into(), "edge-exp".into())));
+}
+
+// ── End-to-end scenario tests ──
+
+#[tokio::test]
+async fn reconcile_pending_pod_injects_target_namespace_into_parameters() {
+    let exp = pod_experiment(Phase::Pending);
+    let kube = MockKube::new();
+    let config = default_config();
+
+    reconcile(&exp, &kube, None, &config).await.unwrap();
+
+    let created = kube.created_jobs.lock().unwrap();
+    assert!(!created.is_empty(), "should have created at least one job");
+
+    let params_str = created[0].env_vars.get("PARAMETERS").expect("PARAMETERS env var missing");
+    let params: serde_json::Value = serde_json::from_str(params_str).unwrap();
+    assert_eq!(
+        params.get("namespace").and_then(|v| v.as_str()),
+        Some("production"),
+        "target namespace must be injected into PARAMETERS for runner"
+    );
+}
+
+#[tokio::test]
+async fn reconcile_pending_pod_preserves_existing_parameters() {
+    let mut exp = pod_experiment(Phase::Pending);
+    exp.spec.parameters = Some(serde_json::json!({"labelSelector": "app=cart", "namespace": "custom"}));
+    let kube = MockKube::new();
+    let config = default_config();
+
+    reconcile(&exp, &kube, None, &config).await.unwrap();
+
+    let created = kube.created_jobs.lock().unwrap();
+    let params_str = created[0].env_vars.get("PARAMETERS").unwrap();
+    let params: serde_json::Value = serde_json::from_str(params_str).unwrap();
+    // existing namespace should NOT be overwritten
+    assert_eq!(
+        params.get("namespace").and_then(|v| v.as_str()),
+        Some("custom"),
+        "existing namespace in parameters should not be overwritten"
+    );
+    assert_eq!(
+        params.get("labelSelector").and_then(|v| v.as_str()),
+        Some("app=cart"),
+        "other parameters must be preserved"
+    );
+}
+
+#[tokio::test]
+async fn reconcile_pending_pod_job_names_within_k8s_limits() {
+    let exp = pod_experiment(Phase::Pending);
+    let kube = MockKube {
+        target_nodes: vec![
+            "ip-10-0-34-50.eu-central-1.compute.internal".to_string(),
+            "ip-192-168-100-200.us-west-2.compute.internal".to_string(),
+        ],
+        ..MockKube::new()
+    };
+    let config = default_config();
+
+    reconcile(&exp, &kube, None, &config).await.unwrap();
+
+    let created = kube.created_jobs.lock().unwrap();
+    assert_eq!(created.len(), 2);
+    for job in created.iter() {
+        assert!(
+            job.name.len() <= 63,
+            "job name '{}' ({} chars) exceeds K8s 63-char limit",
+            job.name,
+            job.name.len()
+        );
+    }
+}
+
+#[tokio::test]
+async fn reconcile_pending_pod_without_parameters_still_injects_namespace() {
+    let mut exp = pod_experiment(Phase::Pending);
+    exp.spec.parameters = None;
+    let kube = MockKube::new();
+    let config = default_config();
+
+    reconcile(&exp, &kube, None, &config).await.unwrap();
+
+    let created = kube.created_jobs.lock().unwrap();
+    assert!(!created.is_empty());
+    let params_str = created[0].env_vars.get("PARAMETERS").expect("PARAMETERS should always be set");
+    let params: serde_json::Value = serde_json::from_str(params_str).unwrap();
+    assert_eq!(
+        params.get("namespace").and_then(|v| v.as_str()),
+        Some("production"),
+        "namespace must be injected even when spec.parameters is None"
+    );
 }

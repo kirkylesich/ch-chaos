@@ -1,3 +1,4 @@
+pub mod analysis_reconciler;
 pub mod controller;
 pub mod crd;
 pub mod graph_builder;
