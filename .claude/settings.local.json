@@ -22,7 +22,29 @@
       "Bash(kubectl logs:*)",
       "Bash(kubectl delete:*)",
       "Bash(aws ecr:*)",
-      "Bash(git:*)"
+      "Bash(git:*)",
+      "Bash(md5:*)",
+      "Bash(kubectl:*)",
+      "Bash(docker run:*)",
+      "Bash(docker builder:*)",
+      "Bash(RUST_LOG=info PROMETHEUS_URL=http://localhost:9090 cargo run:*)",
+      "Bash(kill 70014:*)",
+      "mcp__github__get_me",
+      "Bash(AWS_PROFILE=kirill terraform validate:*)",
+      "Bash(gh variable:*)",
+      "Bash(kill 75704:*)",
+      "Bash(AWS_PROFILE=kirill terraform init:*)",
+      "Bash(AWS_PROFILE=kirill terraform plan:*)",
+      "Bash(curl:*)",
+      "Bash(docker images:*)",
+      "Bash(kill 89643:*)",
+      "Bash(cargo build:*)",
+      "Bash(kubectl get:*)",
+      "Bash(python3:*)",
+      "WebFetch(domain:crates.io)",
+      "WebFetch(domain:docs.rs)",
+      "Bash(trunk:*)",
+      "Bash(rustup target:*)"
     ]
   }
 }
