@@ -5,7 +5,7 @@ on:
     branches: [main]
 
 env:
-  IMAGE: kirill02102/chimp-chaos
+  IMAGE: kirill02102/ch-chaos
 
 jobs:
   build:
@@ -29,3 +29,13 @@ jobs:
             ${{ env.IMAGE }}:latest
           cache-from: type=registry,ref=${{ env.IMAGE }}:buildcache
           cache-to: type=registry,ref=${{ env.IMAGE }}:buildcache,mode=max
+
+      - name: Deploy to ch-infra
+        run: |
+          git clone https://x-access-token:${{ secrets.GH_PAT }}@github.com/kirkylesich/ch-infra.git /tmp/infra
+          cd /tmp/infra
+          sed -i "s|kirill02102/ch-chaos:[a-zA-Z0-9._-]*|kirill02102/ch-chaos:${{ github.sha }}|g" chimp-chaos/deployment.yaml
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add chimp-chaos/deployment.yaml
+          git diff --cached --quiet || { git commit -m "deploy: chimp-chaos ${GITHUB_SHA::7}" && git push; }
