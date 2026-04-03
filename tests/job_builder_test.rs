@@ -186,10 +186,7 @@ fn job_labels() {
 
     let labels = job.metadata.labels.as_ref().unwrap();
     assert_eq!(labels.get("app").unwrap(), "chimp-chaos-runner");
-    assert_eq!(
-        labels.get(EXPERIMENT_LABEL).unwrap(),
-        "pod-killer-test"
-    );
+    assert_eq!(labels.get(EXPERIMENT_LABEL).unwrap(), "pod-killer-test");
     assert_eq!(labels.get(SCENARIO_LABEL).unwrap(), "PodKiller");
 }
 
@@ -207,7 +204,15 @@ fn job_env_vars() {
         &JobBuilderConfig::default(),
     );
 
-    let container = &job.spec.as_ref().unwrap().template.spec.as_ref().unwrap().containers[0];
+    let container = &job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0];
     let envs = container.env.as_ref().unwrap();
 
     let find_env = |name: &str| -> Option<String> {
@@ -235,7 +240,15 @@ fn job_env_vars_no_parameters() {
         &JobBuilderConfig::default(),
     );
 
-    let container = &job.spec.as_ref().unwrap().template.spec.as_ref().unwrap().containers[0];
+    let container = &job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0];
     let envs = container.env.as_ref().unwrap();
     assert!(envs.iter().all(|e| e.name != "PARAMETERS"));
 }
@@ -264,14 +277,8 @@ fn job_prometheus_annotations() {
         .annotations
         .as_ref()
         .unwrap();
-    assert_eq!(
-        annotations.get("prometheus.io/scrape").unwrap(),
-        "true"
-    );
-    assert_eq!(
-        annotations.get("prometheus.io/port").unwrap(),
-        "9090"
-    );
+    assert_eq!(annotations.get("prometheus.io/scrape").unwrap(), "true");
+    assert_eq!(annotations.get("prometheus.io/port").unwrap(), "9090");
 }
 
 #[test]
@@ -341,7 +348,15 @@ fn job_privileged_for_cpu_stress() {
         &JobBuilderConfig::default(),
     );
 
-    let container = &job.spec.as_ref().unwrap().template.spec.as_ref().unwrap().containers[0];
+    let container = &job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0];
     let sec_ctx = container.security_context.as_ref().unwrap();
     assert_eq!(sec_ctx.privileged, Some(true));
 }
@@ -359,7 +374,15 @@ fn job_privileged_for_network_delay() {
         &JobBuilderConfig::default(),
     );
 
-    let container = &job.spec.as_ref().unwrap().template.spec.as_ref().unwrap().containers[0];
+    let container = &job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0];
     let sec_ctx = container.security_context.as_ref().unwrap();
     assert_eq!(sec_ctx.privileged, Some(true));
 }
@@ -377,7 +400,15 @@ fn job_not_privileged_for_pod_killer() {
         &JobBuilderConfig::default(),
     );
 
-    let container = &job.spec.as_ref().unwrap().template.spec.as_ref().unwrap().containers[0];
+    let container = &job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0];
     assert!(container.security_context.is_none());
 }
 
@@ -394,7 +425,15 @@ fn job_container_args() {
         &JobBuilderConfig::default(),
     );
 
-    let container = &job.spec.as_ref().unwrap().template.spec.as_ref().unwrap().containers[0];
+    let container = &job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0];
     assert_eq!(
         container.args.as_ref().unwrap(),
         &vec!["--mode".to_string(), "runner".to_string()]
@@ -418,7 +457,15 @@ fn job_custom_config() {
         &config,
     );
 
-    let container = &job.spec.as_ref().unwrap().template.spec.as_ref().unwrap().containers[0];
+    let container = &job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0];
     assert_eq!(
         container.image.as_deref(),
         Some("my-registry/chimp-chaos:v2")
@@ -454,7 +501,15 @@ fn job_metrics_port() {
         &JobBuilderConfig::default(),
     );
 
-    let container = &job.spec.as_ref().unwrap().template.spec.as_ref().unwrap().containers[0];
+    let container = &job
+        .spec
+        .as_ref()
+        .unwrap()
+        .template
+        .spec
+        .as_ref()
+        .unwrap()
+        .containers[0];
     let port = &container.ports.as_ref().unwrap()[0];
     assert_eq!(port.container_port, 9090);
     assert_eq!(port.name.as_deref(), Some("metrics"));

@@ -40,7 +40,14 @@ impl<R: CommandRunner> Scenario for NetworkDelay<R> {
             .run(
                 "tc",
                 &[
-                    "qdisc", "add", "dev", &self.interface, "root", "netem", "delay", &delay,
+                    "qdisc",
+                    "add",
+                    "dev",
+                    &self.interface,
+                    "root",
+                    "netem",
+                    "delay",
+                    &delay,
                     &jitter,
                 ],
             )
@@ -72,10 +79,7 @@ pub fn parse_config(params: &serde_json::Value) -> Result<(String, u32, u32), Ru
         .and_then(|v| v.as_u64())
         .ok_or_else(|| RunnerError::InvalidConfig("delayMs is required".into()))?
         as u32;
-    let jitter_ms = params
-        .get("jitterMs")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(0) as u32;
+    let jitter_ms = params.get("jitterMs").and_then(|v| v.as_u64()).unwrap_or(0) as u32;
 
     Ok((interface, delay_ms, jitter_ms))
 }

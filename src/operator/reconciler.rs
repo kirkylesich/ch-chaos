@@ -94,11 +94,13 @@ pub fn is_being_deleted(experiment: &ChaosExperiment) -> bool {
 }
 
 pub fn target_namespace(experiment: &ChaosExperiment) -> &str {
-    experiment
-        .spec
-        .target_namespace
-        .as_deref()
-        .unwrap_or(experiment.metadata.namespace.as_deref().unwrap_or("default"))
+    experiment.spec.target_namespace.as_deref().unwrap_or(
+        experiment
+            .metadata
+            .namespace
+            .as_deref()
+            .unwrap_or("default"),
+    )
 }
 
 pub fn requeue_duration(phase: Phase) -> Duration {
@@ -136,23 +138,14 @@ pub fn validate_experiment(spec: &ChaosExperimentSpec) -> Result<(), ValidationE
 
 pub fn all_jobs_succeeded(jobs: &[Job]) -> bool {
     !jobs.is_empty()
-        && jobs.iter().all(|j| {
-            j.status
-                .as_ref()
-                .and_then(|s| s.succeeded)
-                .unwrap_or(0)
-                > 0
-        })
+        && jobs
+            .iter()
+            .all(|j| j.status.as_ref().and_then(|s| s.succeeded).unwrap_or(0) > 0)
 }
 
 pub fn any_job_failed(jobs: &[Job]) -> bool {
-    jobs.iter().any(|j| {
-        j.status
-            .as_ref()
-            .and_then(|s| s.failed)
-            .unwrap_or(0)
-            > 0
-    })
+    jobs.iter()
+        .any(|j| j.status.as_ref().and_then(|s| s.failed).unwrap_or(0) > 0)
 }
 
 fn now_rfc3339() -> String {
@@ -227,7 +220,9 @@ async fn handle_deletion(
     if experiment.spec.scenario.is_edge_chaos() {
         if let Some(eid) = &status.experiment_id {
             let vs_name = virtual_service_name(eid);
-            let _ = kube.delete_virtual_service(target_namespace(experiment), &vs_name).await;
+            let _ = kube
+                .delete_virtual_service(target_namespace(experiment), &vs_name)
+                .await;
         }
     }
 
@@ -280,7 +275,8 @@ async fn handle_pending_pod(
             .clone()
             .unwrap_or(serde_json::json!({}));
         if let Some(obj) = params.as_object_mut() {
-            obj.entry("namespace").or_insert_with(|| serde_json::json!(target_ns));
+            obj.entry("namespace")
+                .or_insert_with(|| serde_json::json!(target_ns));
         }
         Some(params.to_string())
     };
@@ -331,7 +327,9 @@ async fn handle_pending_edge(
         .target
         .as_ref()
         .and_then(|t| t.edge.as_ref())
-        .ok_or(OperatorError::Validation(ValidationError::MissingEdgeTarget))?;
+        .ok_or(OperatorError::Validation(
+            ValidationError::MissingEdgeTarget,
+        ))?;
 
     // 1. Resolve source workload labels
     let source_labels = match kube
@@ -340,9 +338,8 @@ async fn handle_pending_edge(
     {
         Ok(labels) if !labels.is_empty() => labels,
         _ => {
-            let msg =
-                ValidationError::SourceServiceNotFound(edge_target.source_service.clone())
-                    .to_string();
+            let msg = ValidationError::SourceServiceNotFound(edge_target.source_service.clone())
+                .to_string();
             return patch_failed(kube, ns, name, &msg).await;
         }
     };
@@ -355,8 +352,7 @@ async fn handle_pending_edge(
 
     for vs in &existing_vs {
         if !is_chaos_managed(&vs.labels) {
-            let msg =
-                ValidationError::ConflictingVirtualService(dest_fqdn.clone()).to_string();
+            let msg = ValidationError::ConflictingVirtualService(dest_fqdn.clone()).to_string();
             return patch_failed(kube, ns, name, &msg).await;
         }
     }
@@ -514,7 +510,9 @@ async fn handle_terminal(
     if experiment.spec.scenario.is_edge_chaos() {
         if let Some(eid) = &status.experiment_id {
             let vs_name = virtual_service_name(eid);
-            let _ = kube.delete_virtual_service(target_namespace(experiment), &vs_name).await;
+            let _ = kube
+                .delete_virtual_service(target_namespace(experiment), &vs_name)
+                .await;
         }
     }
 

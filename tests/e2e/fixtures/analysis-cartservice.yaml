@@ -1,0 +1,17 @@
+apiVersion: chaos.io/v1
+kind: ChaosAnalysis
+metadata:
+  name: e2e-analysis
+  namespace: online-boutique
+spec:
+  experimentRef:
+    name: e2e-pod-killer
+    namespace: online-boutique
+  prometheus:
+    url: "http://prometheus-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+    baselineWindow: "10m"
+  query: |
+    rate(container_restart_count{namespace="online-boutique", pod=~"cartservice.*"}[5m])
+  degradationDirection: up
+  successCriteria:
+    maxImpact: 50

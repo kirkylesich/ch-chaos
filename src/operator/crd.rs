@@ -121,6 +121,93 @@ fn parameters_schema(_gen: &mut schemars::SchemaGenerator) -> schemars::Schema {
     })
 }
 
+// ── ChaosImpactMap CRD ──
+
+#[derive(CustomResource, Serialize, Deserialize, Debug, Clone, JsonSchema)]
+#[kube(
+    group = "chaos.io",
+    version = "v1",
+    kind = "ChaosImpactMap",
+    namespaced,
+    status = "ChaosImpactMapStatus",
+    shortname = "cim",
+    printcolumn = r#"{"name":"Affected","type":"integer","jsonPath":".status.summary.totalAffected"}"#,
+    printcolumn = r#"{"name":"Scanned","type":"integer","jsonPath":".status.summary.totalScanned"}"#,
+    printcolumn = r#"{"name":"Phase","type":"string","jsonPath":".status.phase"}"#,
+    printcolumn = r#"{"name":"Age","type":"date","jsonPath":".metadata.creationTimestamp"}"#
+)]
+pub struct ChaosImpactMapSpec {
+    #[serde(rename = "experimentRef")]
+    pub experiment_ref: ExperimentRef,
+    pub prometheus: PrometheusConfig,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub scope: Option<ImpactMapScope>,
+    #[serde(rename = "minImpact", default = "default_min_impact")]
+    pub min_impact: u32,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+pub struct ImpactMapScope {
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub namespaces: Vec<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Default, JsonSchema)]
+pub struct ChaosImpactMapStatus {
+    #[serde(default)]
+    pub phase: AnalysisPhase,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub summary: Option<ImpactMapSummary>,
+    #[serde(
+        rename = "affectedServices",
+        default,
+        skip_serializing_if = "Vec::is_empty"
+    )]
+    pub affected_services: Vec<AffectedService>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+pub struct ImpactMapSummary {
+    #[serde(rename = "totalScanned")]
+    pub total_scanned: u32,
+    #[serde(rename = "totalAffected")]
+    pub total_affected: u32,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+pub struct AffectedService {
+    pub workload: String,
+    pub namespace: String,
+    #[serde(rename = "maxImpact")]
+    pub max_impact: u32,
+    pub metrics: ServiceMetrics,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+pub struct ServiceMetrics {
+    #[serde(rename = "latencyP99")]
+    pub latency_p99: MetricImpact,
+    #[serde(rename = "errorRate")]
+    pub error_rate: MetricImpact,
+    pub throughput: MetricImpact,
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, JsonSchema)]
+pub struct MetricImpact {
+    pub baseline: f64,
+    pub during: f64,
+    #[serde(rename = "impactScore")]
+    pub impact_score: u32,
+}
+
+fn default_min_impact() -> u32 {
+    5
+}
+
 // ── Scoring logic ──
 
 pub fn calculate_impact(

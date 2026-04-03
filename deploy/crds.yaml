@@ -235,3 +235,192 @@ spec:
     storage: true
     subresources:
       status: {}
+---
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: chaosimpactmaps.chaos.io
+spec:
+  group: chaos.io
+  names:
+    categories: []
+    kind: ChaosImpactMap
+    plural: chaosimpactmaps
+    shortNames:
+    - cim
+    singular: chaosimpactmap
+  scope: Namespaced
+  versions:
+  - additionalPrinterColumns:
+    - jsonPath: .status.summary.totalAffected
+      name: Affected
+      type: integer
+    - jsonPath: .status.summary.totalScanned
+      name: Scanned
+      type: integer
+    - jsonPath: .status.phase
+      name: Phase
+      type: string
+    - jsonPath: .metadata.creationTimestamp
+      name: Age
+      type: date
+    name: v1
+    schema:
+      openAPIV3Schema:
+        description: Auto-generated derived type for ChaosImpactMapSpec via `CustomResource`
+        properties:
+          spec:
+            properties:
+              experimentRef:
+                properties:
+                  name:
+                    type: string
+                  namespace:
+                    nullable: true
+                    type: string
+                required:
+                - name
+                type: object
+              minImpact:
+                default: 5
+                format: uint32
+                minimum: 0.0
+                type: integer
+              prometheus:
+                properties:
+                  baselineWindow:
+                    type: string
+                  url:
+                    type: string
+                required:
+                - baselineWindow
+                - url
+                type: object
+              scope:
+                nullable: true
+                properties:
+                  namespaces:
+                    items:
+                      type: string
+                    type: array
+                type: object
+            required:
+            - experimentRef
+            - prometheus
+            type: object
+          status:
+            nullable: true
+            properties:
+              affectedServices:
+                items:
+                  properties:
+                    maxImpact:
+                      format: uint32
+                      minimum: 0.0
+                      type: integer
+                    metrics:
+                      properties:
+                        errorRate:
+                          properties:
+                            baseline:
+                              format: double
+                              type: number
+                            during:
+                              format: double
+                              type: number
+                            impactScore:
+                              format: uint32
+                              minimum: 0.0
+                              type: integer
+                          required:
+                          - baseline
+                          - during
+                          - impactScore
+                          type: object
+                        latencyP99:
+                          properties:
+                            baseline:
+                              format: double
+                              type: number
+                            during:
+                              format: double
+                              type: number
+                            impactScore:
+                              format: uint32
+                              minimum: 0.0
+                              type: integer
+                          required:
+                          - baseline
+                          - during
+                          - impactScore
+                          type: object
+                        throughput:
+                          properties:
+                            baseline:
+                              format: double
+                              type: number
+                            during:
+                              format: double
+                              type: number
+                            impactScore:
+                              format: uint32
+                              minimum: 0.0
+                              type: integer
+                          required:
+                          - baseline
+                          - during
+                          - impactScore
+                          type: object
+                      required:
+                      - errorRate
+                      - latencyP99
+                      - throughput
+                      type: object
+                    namespace:
+                      type: string
+                    workload:
+                      type: string
+                  required:
+                  - maxImpact
+                  - metrics
+                  - namespace
+                  - workload
+                  type: object
+                type: array
+              message:
+                nullable: true
+                type: string
+              phase:
+                default: Pending
+                enum:
+                - Pending
+                - Completed
+                - Failed
+                type: string
+              summary:
+                nullable: true
+                properties:
+                  message:
+                    nullable: true
+                    type: string
+                  totalAffected:
+                    format: uint32
+                    minimum: 0.0
+                    type: integer
+                  totalScanned:
+                    format: uint32
+                    minimum: 0.0
+                    type: integer
+                required:
+                - totalAffected
+                - totalScanned
+                type: object
+            type: object
+        required:
+        - spec
+        title: ChaosImpactMap
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}

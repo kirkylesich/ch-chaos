@@ -29,8 +29,9 @@ async fn main() -> anyhow::Result<()> {
         Mode::Operator => {
             tracing::info!("starting chimp-chaos in operator mode");
             let client = kube::Client::try_default().await?;
-            let prometheus_url = std::env::var("PROMETHEUS_URL")
-                .unwrap_or_else(|_| chimp_chaos::operator::types::DEFAULT_PROMETHEUS_URL.to_string());
+            let prometheus_url = std::env::var("PROMETHEUS_URL").unwrap_or_else(|_| {
+                chimp_chaos::operator::types::DEFAULT_PROMETHEUS_URL.to_string()
+            });
             chimp_chaos::operator::controller::run(client, &prometheus_url).await?;
         }
         Mode::Runner => {

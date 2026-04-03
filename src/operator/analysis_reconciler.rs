@@ -72,16 +72,18 @@ pub async fn reconcile_analysis(
         return kube.patch_analysis_status(ns, name, &status).await;
     }
 
-    let started_at = exp_status.started_at.as_deref().ok_or_else(|| {
-        OperatorError::Analysis("experiment has no startedAt".into())
-    })?;
-    let completed_at = exp_status.completed_at.as_deref().ok_or_else(|| {
-        OperatorError::Analysis("experiment has no completedAt".into())
-    })?;
+    let started_at = exp_status
+        .started_at
+        .as_deref()
+        .ok_or_else(|| OperatorError::Analysis("experiment has no startedAt".into()))?;
+    let completed_at = exp_status
+        .completed_at
+        .as_deref()
+        .ok_or_else(|| OperatorError::Analysis("experiment has no completedAt".into()))?;
 
     // 2. Parse baseline window
-    let baseline_secs = parse_duration_str(&analysis.spec.prometheus.baseline_window)
-        .ok_or_else(|| {
+    let baseline_secs =
+        parse_duration_str(&analysis.spec.prometheus.baseline_window).ok_or_else(|| {
             OperatorError::Analysis(format!(
                 "invalid baselineWindow: {}",
                 analysis.spec.prometheus.baseline_window

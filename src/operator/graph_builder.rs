@@ -1,9 +1,10 @@
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 
 use async_trait::async_trait;
 use serde::Deserialize;
 
 use super::analysis_reconciler::AnalysisPrometheusClient;
+use super::impact_map_reconciler::{ImpactMapPrometheusClient, ServiceKey};
 use super::types::{EdgeInfo, OperatorError, DEFAULT_GRAPH_LOOKBACK, DEFAULT_GRAPH_MIN_RPS};
 
 // ── Prometheus client trait (for mocking) ──
@@ -116,6 +117,53 @@ impl AnalysisPrometheusClient for HttpPrometheusClient {
             .first()
             .map(|m| m.value.1.parse::<f64>().unwrap_or(0.0))
             .ok_or_else(|| OperatorError::Prometheus("empty query result".into()))
+    }
+}
+
+#[async_trait]
+impl ImpactMapPrometheusClient for HttpPrometheusClient {
+    async fn query_vector_at(
+        &self,
+        promql: &str,
+        time: &str,
+    ) -> Result<HashMap<ServiceKey, f64>, OperatorError> {
+        let url = format!("{}/api/v1/query", self.base_url);
+        let resp: PrometheusApiResponse = self
+            .client
+            .get(&url)
+            .query(&[("query", promql), ("time", time)])
+            .send()
+            .await
+            .map_err(|e| OperatorError::Prometheus(e.to_string()))?
+            .json()
+            .await
+            .map_err(|e| OperatorError::Prometheus(e.to_string()))?;
+
+        if resp.status != "success" {
+            return Err(OperatorError::Prometheus(format!(
+                "prometheus returned status: {}",
+                resp.status
+            )));
+        }
+
+        let mut map = HashMap::new();
+        for metric in &resp.data.result {
+            let workload = metric.label("destination_workload").to_string();
+            let namespace = metric.label("destination_workload_namespace").to_string();
+            if workload.is_empty() {
+                continue;
+            }
+            let value = metric.value.1.parse::<f64>().unwrap_or(0.0);
+            let value = if value.is_nan() { 0.0 } else { value };
+            map.insert(
+                ServiceKey {
+                    workload,
+                    namespace,
+                },
+                value,
+            );
+        }
+        Ok(map)
     }
 }
 

@@ -3,9 +3,7 @@ use std::collections::BTreeMap;
 use serde::{Deserialize, Serialize};
 use serde_json::json;
 
-use super::types::{
-    ScenarioType, EXPERIMENT_LABEL, MANAGED_BY_LABEL, MANAGED_BY_VALUE,
-};
+use super::types::{ScenarioType, EXPERIMENT_LABEL, MANAGED_BY_LABEL, MANAGED_BY_VALUE};
 
 // ── Helpers ──
 
@@ -60,7 +58,10 @@ pub fn build_fault_for_scenario(
         }
         ScenarioType::EdgeAbort => {
             let percent = parameters.get("abortPercent")?.as_u64()? as u32;
-            let status = parameters.get("abortHttpStatus").and_then(|v| v.as_u64()).unwrap_or(503) as u16;
+            let status = parameters
+                .get("abortHttpStatus")
+                .and_then(|v| v.as_u64())
+                .unwrap_or(503) as u16;
             Some(build_edge_abort_fault(percent, status))
         }
         _ => None,

@@ -2,6 +2,7 @@ pub mod analysis_reconciler;
 pub mod controller;
 pub mod crd;
 pub mod graph_builder;
+pub mod impact_map_reconciler;
 pub mod istio_injector;
 pub mod job_builder;
 pub mod kube_client;

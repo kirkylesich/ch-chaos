@@ -61,12 +61,13 @@ fn default_config() -> GraphBuilderConfig {
 
 #[tokio::test]
 async fn finds_existing_edge() {
-    let client = MockPrometheus::with_edges(vec![
-        ("payment", "ledger", "production", 12.5),
-    ]);
+    let client = MockPrometheus::with_edges(vec![("payment", "ledger", "production", 12.5)]);
     let gb = GraphBuilder::new(client, default_config());
 
-    let edge = gb.resolve_edge("payment", "ledger", "production").await.unwrap();
+    let edge = gb
+        .resolve_edge("payment", "ledger", "production")
+        .await
+        .unwrap();
     assert_eq!(edge.source_workload, "payment");
     assert_eq!(edge.destination_service, "ledger");
     assert!((edge.rps - 12.5).abs() < 0.01);
@@ -81,16 +82,17 @@ async fn finds_edge_among_many() {
     ]);
     let gb = GraphBuilder::new(client, default_config());
 
-    let edge = gb.resolve_edge("payment", "ledger", "production").await.unwrap();
+    let edge = gb
+        .resolve_edge("payment", "ledger", "production")
+        .await
+        .unwrap();
     assert_eq!(edge.source_workload, "payment");
     assert_eq!(edge.destination_service, "ledger");
 }
 
 #[tokio::test]
 async fn edge_not_found() {
-    let client = MockPrometheus::with_edges(vec![
-        ("frontend", "api", "production", 450.0),
-    ]);
+    let client = MockPrometheus::with_edges(vec![("frontend", "api", "production", 450.0)]);
     let gb = GraphBuilder::new(client, default_config());
 
     let result = gb.resolve_edge("payment", "ledger", "production").await;
@@ -125,20 +127,19 @@ async fn edge_traffic_below_threshold() {
 
 #[tokio::test]
 async fn edge_at_exact_threshold_passes() {
-    let client = MockPrometheus::with_edges(vec![
-        ("payment", "ledger", "production", 0.05),
-    ]);
+    let client = MockPrometheus::with_edges(vec![("payment", "ledger", "production", 0.05)]);
     let gb = GraphBuilder::new(client, default_config());
 
-    let edge = gb.resolve_edge("payment", "ledger", "production").await.unwrap();
+    let edge = gb
+        .resolve_edge("payment", "ledger", "production")
+        .await
+        .unwrap();
     assert!((edge.rps - 0.05).abs() < 0.001);
 }
 
 #[tokio::test]
 async fn wrong_namespace_not_matched() {
-    let client = MockPrometheus::with_edges(vec![
-        ("payment", "ledger", "staging", 12.5),
-    ]);
+    let client = MockPrometheus::with_edges(vec![("payment", "ledger", "staging", 12.5)]);
     let gb = GraphBuilder::new(client, default_config());
 
     let result = gb.resolve_edge("payment", "ledger", "production").await;
@@ -158,9 +159,7 @@ async fn prometheus_error_propagated() {
 
 #[tokio::test]
 async fn custom_config_min_rps() {
-    let client = MockPrometheus::with_edges(vec![
-        ("payment", "ledger", "production", 0.5),
-    ]);
+    let client = MockPrometheus::with_edges(vec![("payment", "ledger", "production", 0.5)]);
     let config = GraphBuilderConfig {
         lookback: "5m".to_string(),
         min_rps: 1.0,

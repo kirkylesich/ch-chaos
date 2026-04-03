@@ -1,0 +1,16 @@
+apiVersion: chaos.io/v1
+kind: ChaosImpactMap
+metadata:
+  name: payment-delay-blast-radius
+  namespace: default
+spec:
+  experimentRef:
+    name: payment-ledger-delay
+    namespace: default
+  prometheus:
+    url: "http://prometheus-kube-prometheus-stack-prometheus.monitoring.svc.cluster.local:9090"
+    baselineWindow: "30m"
+  scope:
+    namespaces:
+      - online-boutique
+  minImpact: 5

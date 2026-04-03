@@ -114,7 +114,55 @@ When implementing:
 - Use WebSearch/WebFetch for patterns not covered by context7
 - Always use the **latest stable versions** of all crates — verify via context7 or WebSearch before adding to Cargo.toml
 
-## Testing
+## Development & Testing Workflow
+
+### How Claude should work on this project
+
+**Adding a feature or fixing a bug — full cycle:**
+
+1. **Read** the relevant code. Understand context before writing anything.
+2. **Write a failing test first** (red). Use mockall/wiremock — no cluster needed.
+3. **Implement the fix/feature** → `cargo test <test_name>` (green).
+4. **Run full checks**: `make check` (fmt + clippy + all tests).
+5. **E2E verification** (if operator/runner behavior changed):
+   - `make e2e` — starts operator locally, applies experiment against real cluster, checks result.
+   - Requires: kubeconfig configured, runner image in Docker Hub (`kirill02102/ch-chaos`), online-boutique running.
+6. **If runner code changed** — user must `make docker-push TAG=dev` before E2E (Claude has no Docker).
+
+**What Claude CAN do:**
+- `cargo test`, `cargo clippy`, `cargo build`, `cargo run`
+- `kubectl apply/get/delete` — manage CRDs, check pods, read logs
+- `make e2e` — full end-to-end test cycle
+- Start operator locally (`make run`) + apply experiments manually
+
+**What Claude CANNOT do:**
+- `docker build` / `docker push` — no Docker daemon available
+- If runner scenarios changed, ask user to run `make docker-push TAG=dev`
+
+### Makefile targets
+```bash
+make test              # cargo test (mocked, fast, ~10s)
+make lint              # cargo clippy -- -D warnings
+make fmt               # cargo fmt
+make check             # fmt + lint + test (run before any commit)
+make run               # start operator locally (needs port-forward in another terminal)
+make run-port-forward  # kubectl port-forward Prometheus to :9090
+make e2e               # full E2E: port-forward → operator → experiment → analysis → cleanup
+make docker-push TAG=dev  # build + push runner image (user only, Claude has no Docker)
+make crds              # regenerate CRD YAML from Rust types
+```
+
+### E2E test fixtures
+- `tests/e2e/fixtures/pod-killer-cartservice.yaml` — PodKiller targeting cartservice in online-boutique
+- `tests/e2e/fixtures/analysis-cartservice.yaml` — ChaosAnalysis checking restart rate impact
+- `tests/e2e/run.sh` — full cycle script with cleanup trap
+
+### CI/CD
+- `.github/workflows/ci.yml` — on push to main: Docker build+push to `kirill02102/ch-chaos`, then updates image tag in ch-infra repo → ArgoCD deploys
+- Runner image: `kirill02102/ch-chaos:<sha>` + `:latest`
+- Buildx registry cache at `kirill02102/ch-chaos:buildcache`
+
+## Unit Testing
 
 All code must be covered with tests using mocks. No real K8s cluster or Prometheus required for tests.
 

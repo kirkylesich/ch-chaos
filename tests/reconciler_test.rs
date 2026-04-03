@@ -100,7 +100,10 @@ impl MockKube {
 impl KubeClient for MockKube {
     async fn create_job(&self, ns: &str, job: &Job) -> Result<(), OperatorError> {
         let name = job.metadata.name.clone().unwrap_or_default();
-        self.calls.lock().unwrap().push(Call::CreateJob(name.clone()));
+        self.calls
+            .lock()
+            .unwrap()
+            .push(Call::CreateJob(name.clone()));
         let env_vars: std::collections::HashMap<String, String> = job
             .spec
             .as_ref()
@@ -516,7 +519,10 @@ fn validate_edge_ok() {
 
 #[test]
 fn all_jobs_succeeded_true() {
-    let jobs = vec![job_with_status(Some(1), None), job_with_status(Some(1), None)];
+    let jobs = vec![
+        job_with_status(Some(1), None),
+        job_with_status(Some(1), None),
+    ];
     assert!(all_jobs_succeeded(&jobs));
 }
 
@@ -583,10 +589,7 @@ async fn reconcile_pending_pod_creates_jobs() {
 
     assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
     assert!(kube.has_call(&Call::ListTargetNodes("production".into())));
-    assert!(kube
-        .calls()
-        .iter()
-        .any(|c| matches!(c, Call::CreateJob(_))));
+    assert!(kube.calls().iter().any(|c| matches!(c, Call::CreateJob(_))));
     assert!(kube
         .calls()
         .iter()
@@ -806,7 +809,10 @@ async fn reconcile_pending_pod_injects_target_namespace_into_parameters() {
     let created = kube.created_jobs.lock().unwrap();
     assert!(!created.is_empty(), "should have created at least one job");
 
-    let params_str = created[0].env_vars.get("PARAMETERS").expect("PARAMETERS env var missing");
+    let params_str = created[0]
+        .env_vars
+        .get("PARAMETERS")
+        .expect("PARAMETERS env var missing");
     let params: serde_json::Value = serde_json::from_str(params_str).unwrap();
     assert_eq!(
         params.get("namespace").and_then(|v| v.as_str()),
@@ -818,7 +824,8 @@ async fn reconcile_pending_pod_injects_target_namespace_into_parameters() {
 #[tokio::test]
 async fn reconcile_pending_pod_preserves_existing_parameters() {
     let mut exp = pod_experiment(Phase::Pending);
-    exp.spec.parameters = Some(serde_json::json!({"labelSelector": "app=cart", "namespace": "custom"}));
+    exp.spec.parameters =
+        Some(serde_json::json!({"labelSelector": "app=cart", "namespace": "custom"}));
     let kube = MockKube::new();
     let config = default_config();
 
@@ -877,7 +884,10 @@ async fn reconcile_pending_pod_without_parameters_still_injects_namespace() {
 
     let created = kube.created_jobs.lock().unwrap();
     assert!(!created.is_empty());
-    let params_str = created[0].env_vars.get("PARAMETERS").expect("PARAMETERS should always be set");
+    let params_str = created[0]
+        .env_vars
+        .get("PARAMETERS")
+        .expect("PARAMETERS should always be set");
     let params: serde_json::Value = serde_json::from_str(params_str).unwrap();
     assert_eq!(
         params.get("namespace").and_then(|v| v.as_str()),

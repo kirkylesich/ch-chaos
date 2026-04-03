@@ -44,7 +44,12 @@
       "WebFetch(domain:crates.io)",
       "WebFetch(domain:docs.rs)",
       "Bash(trunk:*)",
-      "Bash(rustup target:*)"
+      "Bash(rustup target:*)",
+      "mcp__mcp-memory-service__memory_search",
+      "Bash(cargo fmt:*)",
+      "mcp__mcp-memory-service__memory_store",
+      "Bash(RUST_LOG=info PROMETHEUS_URL=http://localhost:9090 RUNNER_IMAGE=kirill02102/ch-chaos:latest cargo run:*)",
+      "Bash(kill 1240)"
     ]
   }
 }

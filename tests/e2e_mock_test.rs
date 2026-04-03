@@ -107,11 +107,7 @@ impl KubeClient for StatefulKube {
         Ok(())
     }
 
-    async fn list_jobs(
-        &self,
-        _ns: &str,
-        _label_selector: &str,
-    ) -> Result<Vec<Job>, OperatorError> {
+    async fn list_jobs(&self, _ns: &str, _label_selector: &str) -> Result<Vec<Job>, OperatorError> {
         self.record("list_jobs");
         Ok(self.job_results.lock().unwrap().clone())
     }
@@ -153,11 +149,7 @@ impl KubeClient for StatefulKube {
         Ok(vec![])
     }
 
-    async fn delete_virtual_service(
-        &self,
-        _ns: &str,
-        name: &str,
-    ) -> Result<(), OperatorError> {
+    async fn delete_virtual_service(&self, _ns: &str, name: &str) -> Result<(), OperatorError> {
         self.record(&format!("delete_virtual_service:{name}"));
         Ok(())
     }
@@ -229,9 +221,10 @@ impl MockProm {
 #[async_trait]
 impl AnalysisPrometheusClient for MockProm {
     async fn query_at(&self, _promql: &str, _time: &str) -> Result<f64, OperatorError> {
-        let mut count = self.call_count.lock().map_err(|e| {
-            OperatorError::Analysis(e.to_string())
-        })?;
+        let mut count = self
+            .call_count
+            .lock()
+            .map_err(|e| OperatorError::Analysis(e.to_string()))?;
         *count += 1;
         // First call = baseline, second call = during
         if *count == 1 {
@@ -276,10 +269,9 @@ fn with_status(mut exp: ChaosExperiment, status: ChaosExperimentStatus) -> Chaos
 }
 
 fn with_deletion(mut exp: ChaosExperiment) -> ChaosExperiment {
-    exp.metadata.deletion_timestamp =
-        Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
-            k8s_openapi::jiff::Timestamp::now(),
-        ));
+    exp.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
+        k8s_openapi::jiff::Timestamp::now(),
+    ));
     exp
 }
 
@@ -364,28 +356,43 @@ async fn e2e_pod_chaos_full_lifecycle() {
     assert!(status.message.as_deref().unwrap_or("").contains("2 nodes"));
 
     // ── Phase 3: Running, jobs not done yet → stays Running ──
-    let exp = with_status(pod_experiment_no_finalizer(), kube.current_experiment_status());
+    let exp = with_status(
+        pod_experiment_no_finalizer(),
+        kube.current_experiment_status(),
+    );
     let result = reconcile(&exp, &kube, None, &config).await.unwrap();
     assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
     // Phase should remain Running (no jobs returned = not done)
 
     // ── Phase 4: Running, all jobs succeeded → transitions to Succeeded ──
     kube.set_jobs_succeeded();
-    let exp = with_status(pod_experiment_no_finalizer(), kube.current_experiment_status());
+    let exp = with_status(
+        pod_experiment_no_finalizer(),
+        kube.current_experiment_status(),
+    );
     let result = reconcile(&exp, &kube, None, &config).await.unwrap();
     assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
     assert_eq!(kube.current_phase(), Phase::Succeeded);
     assert!(kube.current_experiment_status().completed_at.is_some());
 
     // ── Phase 5: Succeeded → cleanup (delete jobs, mark cleanup_done) ──
-    let exp = with_status(pod_experiment_no_finalizer(), kube.current_experiment_status());
+    let exp = with_status(
+        pod_experiment_no_finalizer(),
+        kube.current_experiment_status(),
+    );
     let result = reconcile(&exp, &kube, None, &config).await.unwrap();
     assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(300)));
     assert!(kube.current_experiment_status().cleanup_done);
-    assert!(kube.get_calls().iter().any(|c| c.starts_with("delete_job:")));
+    assert!(kube
+        .get_calls()
+        .iter()
+        .any(|c| c.starts_with("delete_job:")));
 
     // ── Phase 6: Succeeded + cleanup_done → no-op ──
-    let exp = with_status(pod_experiment_no_finalizer(), kube.current_experiment_status());
+    let exp = with_status(
+        pod_experiment_no_finalizer(),
+        kube.current_experiment_status(),
+    );
     let calls_before = kube.get_calls().len();
     reconcile(&exp, &kube, None, &config).await.unwrap();
     let calls_after = kube.get_calls().len();
@@ -408,7 +415,10 @@ async fn e2e_pod_chaos_job_failure() {
 
     // Running + failed jobs → Failed
     kube.set_jobs_failed();
-    let exp = with_status(pod_experiment_no_finalizer(), kube.current_experiment_status());
+    let exp = with_status(
+        pod_experiment_no_finalizer(),
+        kube.current_experiment_status(),
+    );
     reconcile(&exp, &kube, None, &config).await.unwrap();
     assert_eq!(kube.current_phase(), Phase::Failed);
     assert!(kube
@@ -436,10 +446,11 @@ async fn e2e_pod_chaos_deletion_during_running() {
     ));
     let result = reconcile(&exp, &kube, None, &config).await.unwrap();
     assert_eq!(result, ReconcileResult::Done);
+    assert!(kube.get_calls().contains(&"remove_finalizer".to_string()));
     assert!(kube
         .get_calls()
-        .contains(&"remove_finalizer".to_string()));
-    assert!(kube.get_calls().iter().any(|c| c.starts_with("delete_job:")));
+        .iter()
+        .any(|c| c.starts_with("delete_job:")));
 }
 
 // ══════════════════════════════════════════════════
@@ -526,7 +537,10 @@ async fn e2e_experiment_then_analysis_pass() {
     assert_eq!(kube.current_phase(), Phase::Running);
 
     kube.set_jobs_succeeded();
-    let exp = with_status(pod_experiment_no_finalizer(), kube.current_experiment_status());
+    let exp = with_status(
+        pod_experiment_no_finalizer(),
+        kube.current_experiment_status(),
+    );
     reconcile(&exp, &kube, None, &config).await.unwrap();
     assert_eq!(kube.current_phase(), Phase::Succeeded);
 
@@ -537,7 +551,9 @@ async fn e2e_experiment_then_analysis_pass() {
 
     reconcile_analysis(&analysis, &kube, &prom).await.unwrap();
 
-    let status = kube.get_analysis_status().expect("analysis should be patched");
+    let status = kube
+        .get_analysis_status()
+        .expect("analysis should be patched");
     assert_eq!(status.phase, AnalysisPhase::Completed);
     assert_eq!(status.verdict, Some(AnalysisVerdict::Pass));
     assert!(status.impact_score.unwrap_or(100) <= 30);
@@ -555,7 +571,10 @@ async fn e2e_experiment_then_analysis_fail() {
     let exp = with_finalizer(pod_experiment_no_finalizer());
     reconcile(&exp, &kube, None, &config).await.unwrap();
     kube.set_jobs_succeeded();
-    let exp = with_status(pod_experiment_no_finalizer(), kube.current_experiment_status());
+    let exp = with_status(
+        pod_experiment_no_finalizer(),
+        kube.current_experiment_status(),
+    );
     reconcile(&exp, &kube, None, &config).await.unwrap();
     assert_eq!(kube.current_phase(), Phase::Succeeded);
 
@@ -565,7 +584,9 @@ async fn e2e_experiment_then_analysis_fail() {
 
     reconcile_analysis(&analysis, &kube, &prom).await.unwrap();
 
-    let status = kube.get_analysis_status().expect("analysis should be patched");
+    let status = kube
+        .get_analysis_status()
+        .expect("analysis should be patched");
     assert_eq!(status.phase, AnalysisPhase::Completed);
     assert_eq!(status.verdict, Some(AnalysisVerdict::Fail));
     assert_eq!(status.impact_score, Some(80));
@@ -587,13 +608,18 @@ async fn e2e_analysis_waits_for_running_experiment() {
 
     reconcile_analysis(&analysis, &kube, &prom).await.unwrap();
 
-    let status = kube.get_analysis_status().expect("analysis should be patched");
+    let status = kube
+        .get_analysis_status()
+        .expect("analysis should be patched");
     assert_eq!(status.phase, AnalysisPhase::Pending);
     assert!(status.message.as_deref().unwrap_or("").contains("Waiting"));
 
     // ── Complete the experiment ──
     kube.set_jobs_succeeded();
-    let exp = with_status(pod_experiment_no_finalizer(), kube.current_experiment_status());
+    let exp = with_status(
+        pod_experiment_no_finalizer(),
+        kube.current_experiment_status(),
+    );
     reconcile(&exp, &kube, None, &config).await.unwrap();
     assert_eq!(kube.current_phase(), Phase::Succeeded);
 
@@ -601,7 +627,9 @@ async fn e2e_analysis_waits_for_running_experiment() {
     let prom2 = MockProm::new(1.0, 1.0);
     reconcile_analysis(&analysis, &kube, &prom2).await.unwrap();
 
-    let status = kube.get_analysis_status().expect("analysis should be patched");
+    let status = kube
+        .get_analysis_status()
+        .expect("analysis should be patched");
     assert_eq!(status.phase, AnalysisPhase::Completed);
     assert_eq!(status.verdict, Some(AnalysisVerdict::Pass));
 }

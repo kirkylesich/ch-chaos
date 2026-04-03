@@ -44,10 +44,7 @@ impl std::fmt::Display for ExperimentId {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
-pub struct ExperimentDuration(
-    #[schemars(schema_with = "non_zero_u64_schema")]
-    pub NonZeroU64,
-);
+pub struct ExperimentDuration(#[schemars(schema_with = "non_zero_u64_schema")] pub NonZeroU64);
 
 fn non_zero_u64_schema(generator: &mut schemars::SchemaGenerator) -> schemars::Schema {
     <u64 as JsonSchema>::json_schema(generator)

@@ -15,10 +15,7 @@ fn fqdn_format() {
 
 #[test]
 fn fqdn_default_namespace() {
-    assert_eq!(
-        fqdn("api", "default"),
-        "api.default.svc.cluster.local"
-    );
+    assert_eq!(fqdn("api", "default"), "api.default.svc.cluster.local");
 }
 
 // ── VirtualService name ──
@@ -88,7 +85,10 @@ fn build_fault_returns_none_for_pod_chaos() {
 fn vs_json_has_fqdn_hosts() {
     let spec = test_vs_spec();
     let vs = build_virtual_service_json(&spec);
-    assert_eq!(vs["spec"]["hosts"][0], "ledger.production.svc.cluster.local");
+    assert_eq!(
+        vs["spec"]["hosts"][0],
+        "ledger.production.svc.cluster.local"
+    );
 }
 
 #[test]
@@ -106,7 +106,10 @@ fn vs_json_has_owner_references() {
 fn vs_json_has_managed_by_label() {
     let spec = test_vs_spec();
     let vs = build_virtual_service_json(&spec);
-    assert_eq!(vs["metadata"]["labels"]["chaos.io/managed-by"], "chimp-chaos");
+    assert_eq!(
+        vs["metadata"]["labels"]["chaos.io/managed-by"],
+        "chimp-chaos"
+    );
 }
 
 #[test]
@@ -160,9 +163,7 @@ fn vs_json_both_routes_same_destination() {
 
 #[test]
 fn chaos_managed_true() {
-    let labels = BTreeMap::from([
-        ("chaos.io/managed-by".into(), "chimp-chaos".into()),
-    ]);
+    let labels = BTreeMap::from([("chaos.io/managed-by".into(), "chimp-chaos".into())]);
     assert!(is_chaos_managed(&labels));
 }
 
@@ -174,9 +175,7 @@ fn chaos_managed_false_no_label() {
 
 #[test]
 fn chaos_managed_false_wrong_value() {
-    let labels = BTreeMap::from([
-        ("chaos.io/managed-by".into(), "other-tool".into()),
-    ]);
+    let labels = BTreeMap::from([("chaos.io/managed-by".into(), "other-tool".into())]);
     assert!(!is_chaos_managed(&labels));
 }
 

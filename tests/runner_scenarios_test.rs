@@ -63,7 +63,6 @@ impl MockCommandRunner {
             should_fail: true,
         }
     }
-
 }
 
 #[async_trait]

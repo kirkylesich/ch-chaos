@@ -78,22 +78,14 @@ pub fn parse_config(
     params: &serde_json::Value,
     duration_secs: u64,
 ) -> Result<(u32, u32), RunnerError> {
-    let cores = params
-        .get("cores")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(1) as u32;
-    let percent = params
-        .get("percent")
-        .and_then(|v| v.as_u64())
-        .unwrap_or(80) as u32;
+    let cores = params.get("cores").and_then(|v| v.as_u64()).unwrap_or(1) as u32;
+    let percent = params.get("percent").and_then(|v| v.as_u64()).unwrap_or(80) as u32;
 
     if cores == 0 {
         return Err(RunnerError::InvalidConfig("cores must be > 0".into()));
     }
     if percent > 100 {
-        return Err(RunnerError::InvalidConfig(
-            "percent must be 0-100".into(),
-        ));
+        return Err(RunnerError::InvalidConfig("percent must be 0-100".into()));
     }
     let _ = duration_secs;
 

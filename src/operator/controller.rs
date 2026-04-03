@@ -7,8 +7,9 @@ use kube::{Api, Client};
 use tokio::time::Duration;
 
 use super::analysis_reconciler;
-use super::crd::{ChaosAnalysis, ChaosExperiment};
+use super::crd::{ChaosAnalysis, ChaosExperiment, ChaosImpactMap};
 use super::graph_builder::{GraphBuilder, GraphBuilderConfig, HttpPrometheusClient};
+use super::impact_map_reconciler;
 use super::kube_client::RealKubeClient;
 use super::reconciler::{self, EdgeResolver, ReconcileResult, ReconcilerConfig};
 use super::types::OperatorError;
@@ -92,11 +93,37 @@ fn analysis_error_policy(
     Action::requeue(Duration::from_secs(30))
 }
 
-// ── Run both controllers ──
+// ── ImpactMap controller context ──
+
+struct ImpactMapContext {
+    kube_client: RealKubeClient,
+    prom_client: HttpPrometheusClient,
+}
+
+async fn reconcile_impact_map_handler(
+    impact_map: Arc<ChaosImpactMap>,
+    ctx: Arc<ImpactMapContext>,
+) -> Result<Action, OperatorError> {
+    impact_map_reconciler::reconcile_impact_map(&impact_map, &ctx.kube_client, &ctx.prom_client)
+        .await?;
+    Ok(Action::requeue(Duration::from_secs(300)))
+}
+
+fn impact_map_error_policy(
+    _impact_map: Arc<ChaosImpactMap>,
+    error: &OperatorError,
+    _ctx: Arc<ImpactMapContext>,
+) -> Action {
+    tracing::error!(%error, "impact map reconcile error");
+    Action::requeue(Duration::from_secs(30))
+}
+
+// ── Run all controllers ──
 
 pub async fn run(client: Client, prometheus_url: &str) -> anyhow::Result<()> {
     let experiments: Api<ChaosExperiment> = Api::all(client.clone());
     let analyses: Api<ChaosAnalysis> = Api::all(client.clone());
+    let impact_maps: Api<ChaosImpactMap> = Api::all(client.clone());
 
     let graph_config = GraphBuilderConfig::default();
     let prom_client = HttpPrometheusClient::new(prometheus_url);
@@ -144,7 +171,27 @@ pub async fn run(client: Client, prometheus_url: &str) -> anyhow::Result<()> {
             }
         });
 
-    tokio::join!(exp_controller, analysis_controller);
+    let impact_map_ctx = Arc::new(ImpactMapContext {
+        kube_client: RealKubeClient::new(client.clone()),
+        prom_client: HttpPrometheusClient::new(prometheus_url),
+    });
+
+    tracing::info!("starting ChaosImpactMap controller");
+    let impact_map_controller = Controller::new(impact_maps, watcher::Config::default())
+        .shutdown_on_signal()
+        .run(
+            reconcile_impact_map_handler,
+            impact_map_error_policy,
+            impact_map_ctx,
+        )
+        .for_each(|res| async move {
+            match res {
+                Ok(o) => tracing::debug!(?o, "impact map reconciled"),
+                Err(e) => tracing::error!(%e, "impact map reconcile failed"),
+            }
+        });
+
+    tokio::join!(exp_controller, analysis_controller, impact_map_controller);
 
     Ok(())
 }

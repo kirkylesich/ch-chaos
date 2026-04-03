@@ -8,7 +8,11 @@ use kube::{Client, ResourceExt};
 use serde_json::json;
 
 use super::analysis_reconciler::AnalysisKubeClient;
-use super::crd::{ChaosAnalysis, ChaosAnalysisStatus, ChaosExperiment, ChaosExperimentStatus};
+use super::crd::{
+    ChaosAnalysis, ChaosAnalysisStatus, ChaosExperiment, ChaosExperimentStatus, ChaosImpactMap,
+    ChaosImpactMapStatus,
+};
+use super::impact_map_reconciler::ImpactMapKubeClient;
 use super::reconciler::{KubeClient, VirtualServiceInfo};
 use super::types::{OperatorError, FINALIZER_NAME};
 
@@ -55,8 +59,7 @@ impl KubeClient for RealKubeClient {
     }
 
     async fn list_target_nodes(&self, ns: &str) -> Result<Vec<String>, OperatorError> {
-        let api: Api<k8s_openapi::api::core::v1::Pod> =
-            Api::namespaced(self.client.clone(), ns);
+        let api: Api<k8s_openapi::api::core::v1::Pod> = Api::namespaced(self.client.clone(), ns);
         let lp = ListParams::default();
         let pods = api.list(&lp).await?;
 
@@ -77,10 +80,7 @@ impl KubeClient for RealKubeClient {
     ) -> Result<BTreeMap<String, String>, OperatorError> {
         let api: Api<Service> = Api::namespaced(self.client.clone(), ns);
         let svc = api.get(name).await?;
-        Ok(svc
-            .spec
-            .and_then(|s| s.selector)
-            .unwrap_or_default())
+        Ok(svc.spec.and_then(|s| s.selector).unwrap_or_default())
     }
 
     async fn create_virtual_service(
@@ -127,8 +127,12 @@ impl KubeClient for RealKubeClient {
     ) -> Result<(), OperatorError> {
         let api: Api<ChaosExperiment> = Api::namespaced(self.client.clone(), ns);
         let patch = json!({ "status": status });
-        api.patch_status(name, &PatchParams::apply("chimp-chaos"), &Patch::Merge(&patch))
-            .await?;
+        api.patch_status(
+            name,
+            &PatchParams::apply("chimp-chaos"),
+            &Patch::Merge(&patch),
+        )
+        .await?;
         Ok(())
     }
 
@@ -139,8 +143,12 @@ impl KubeClient for RealKubeClient {
                 "finalizers": [FINALIZER_NAME]
             }
         });
-        api.patch(name, &PatchParams::apply("chimp-chaos"), &Patch::Merge(&patch))
-            .await?;
+        api.patch(
+            name,
+            &PatchParams::apply("chimp-chaos"),
+            &Patch::Merge(&patch),
+        )
+        .await?;
         Ok(())
     }
 
@@ -151,8 +159,12 @@ impl KubeClient for RealKubeClient {
                 "finalizers": []
             }
         });
-        api.patch(name, &PatchParams::apply("chimp-chaos"), &Patch::Merge(&patch))
-            .await?;
+        api.patch(
+            name,
+            &PatchParams::apply("chimp-chaos"),
+            &Patch::Merge(&patch),
+        )
+        .await?;
         Ok(())
     }
 }
@@ -179,8 +191,44 @@ impl AnalysisKubeClient for RealKubeClient {
     ) -> Result<(), OperatorError> {
         let api: Api<ChaosAnalysis> = Api::namespaced(self.client.clone(), ns);
         let patch = json!({ "status": status });
-        api.patch_status(name, &PatchParams::apply("chimp-chaos"), &Patch::Merge(&patch))
-            .await?;
+        api.patch_status(
+            name,
+            &PatchParams::apply("chimp-chaos"),
+            &Patch::Merge(&patch),
+        )
+        .await?;
+        Ok(())
+    }
+}
+
+// ── ImpactMapKubeClient impl ──
+
+#[async_trait]
+impl ImpactMapKubeClient for RealKubeClient {
+    async fn get_experiment_status(
+        &self,
+        ns: &str,
+        name: &str,
+    ) -> Result<ChaosExperimentStatus, OperatorError> {
+        let api: Api<ChaosExperiment> = Api::namespaced(self.client.clone(), ns);
+        let exp = api.get(name).await?;
+        Ok(exp.status.unwrap_or_default())
+    }
+
+    async fn patch_impact_map_status(
+        &self,
+        ns: &str,
+        name: &str,
+        status: &ChaosImpactMapStatus,
+    ) -> Result<(), OperatorError> {
+        let api: Api<ChaosImpactMap> = Api::namespaced(self.client.clone(), ns);
+        let patch = json!({ "status": status });
+        api.patch_status(
+            name,
+            &PatchParams::apply("chimp-chaos"),
+            &Patch::Merge(&patch),
+        )
+        .await?;
         Ok(())
     }
 }

@@ -108,17 +108,19 @@ async fn execute_scenario(config: &RunnerConfig) -> Result<u32, RunnerError> {
             stress.execute().await
         }
         ScenarioType::NetworkDelay => {
-            let (iface, delay_ms, jitter_ms) =
-                network_delay::parse_config(&config.parameters)?;
-            let delay =
-                NetworkDelay::new(SystemCommandRunner, &iface, delay_ms, jitter_ms, config.duration);
+            let (iface, delay_ms, jitter_ms) = network_delay::parse_config(&config.parameters)?;
+            let delay = NetworkDelay::new(
+                SystemCommandRunner,
+                &iface,
+                delay_ms,
+                jitter_ms,
+                config.duration,
+            );
             delay.execute().await
         }
-        ScenarioType::EdgeDelay | ScenarioType::EdgeAbort => {
-            Err(RunnerError::InvalidConfig(
-                "edge scenarios do not use runner pods".into(),
-            ))
-        }
+        ScenarioType::EdgeDelay | ScenarioType::EdgeAbort => Err(RunnerError::InvalidConfig(
+            "edge scenarios do not use runner pods".into(),
+        )),
     }
 }
 

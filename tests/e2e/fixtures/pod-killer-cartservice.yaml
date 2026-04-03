@@ -1,0 +1,11 @@
+apiVersion: chaos.io/v1
+kind: ChaosExperiment
+metadata:
+  name: e2e-pod-killer
+  namespace: online-boutique
+spec:
+  scenario: PodKiller
+  duration: 30
+  targetNamespace: online-boutique
+  parameters:
+    labelSelector: "app=cartservice"

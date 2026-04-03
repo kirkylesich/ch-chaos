@@ -19,8 +19,8 @@ fn crd_parameters_field_has_type() {
     let yaml = serde_yaml::to_string(&crd).unwrap();
     let doc: serde_json::Value = serde_yaml::from_str(&yaml).unwrap();
 
-    let parameters_schema = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
-        ["properties"]["spec"]["properties"]["parameters"];
+    let parameters_schema = &doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]
+        ["spec"]["properties"]["parameters"];
 
     assert_eq!(
         parameters_schema.get("type").and_then(|t| t.as_str()),
@@ -37,14 +37,16 @@ fn crd_all_spec_properties_have_type() {
     let yaml = serde_yaml::to_string(&crd).unwrap();
     let doc: serde_json::Value = serde_yaml::from_str(&yaml).unwrap();
 
-    let props = doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]
-        ["properties"]["spec"]["properties"]
+    let props = doc["spec"]["versions"][0]["schema"]["openAPIV3Schema"]["properties"]["spec"]
+        ["properties"]
         .as_object()
         .expect("spec properties should be an object");
 
     for (name, schema) in props {
         assert!(
-            schema.get("type").is_some() || schema.get("$ref").is_some() || schema.get("allOf").is_some(),
+            schema.get("type").is_some()
+                || schema.get("$ref").is_some()
+                || schema.get("allOf").is_some(),
             "spec property '{}' has no 'type' — K8s will reject this CRD",
             name,
         );
@@ -122,6 +124,52 @@ fn analysis_spec_serde() {
     assert_eq!(spec.experiment_ref.name, "pod-killer-test");
     assert_eq!(spec.degradation_direction, DegradationDirection::Up);
     assert_eq!(spec.success_criteria.max_impact, 30);
+}
+
+// ── ChaosImpactMap CRD ──
+
+#[test]
+fn crd_generates_valid_impact_map_schema() {
+    let crd = ChaosImpactMap::crd();
+    assert_eq!(
+        crd.metadata.name.as_deref(),
+        Some("chaosimpactmaps.chaos.io")
+    );
+}
+
+#[test]
+fn impact_map_spec_serde() {
+    let json = r#"{
+        "experimentRef": {"name": "edge-delay-test", "namespace": "default"},
+        "prometheus": {"url": "http://prometheus:9090", "baselineWindow": "30m"},
+        "scope": {"namespaces": ["production", "staging"]},
+        "minImpact": 10
+    }"#;
+    let spec: ChaosImpactMapSpec = serde_json::from_str(json).unwrap();
+    assert_eq!(spec.experiment_ref.name, "edge-delay-test");
+    assert_eq!(spec.min_impact, 10);
+    let scope = spec.scope.unwrap();
+    assert_eq!(scope.namespaces, vec!["production", "staging"]);
+}
+
+#[test]
+fn impact_map_spec_serde_minimal() {
+    let json = r#"{
+        "experimentRef": {"name": "test"},
+        "prometheus": {"url": "http://prometheus:9090", "baselineWindow": "5m"}
+    }"#;
+    let spec: ChaosImpactMapSpec = serde_json::from_str(json).unwrap();
+    assert_eq!(spec.min_impact, 5); // default
+    assert!(spec.scope.is_none());
+}
+
+#[test]
+fn impact_map_status_defaults() {
+    let status = ChaosImpactMapStatus::default();
+    assert_eq!(status.phase, AnalysisPhase::Pending);
+    assert!(status.summary.is_none());
+    assert!(status.affected_services.is_empty());
+    assert!(status.message.is_none());
 }
 
 // ── Impact scoring tests ──

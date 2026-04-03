@@ -36,7 +36,11 @@ pub fn build_runner_job(
     config: &JobBuilderConfig,
 ) -> Job {
     let exp_name = experiment.metadata.name.as_deref().unwrap_or("unknown");
-    let namespace = experiment.metadata.namespace.as_deref().unwrap_or("default");
+    let namespace = experiment
+        .metadata
+        .namespace
+        .as_deref()
+        .unwrap_or("default");
     let job_name = make_job_name(experiment_id, node_name);
 
     Job {
@@ -50,7 +54,14 @@ pub fn build_runner_job(
         spec: Some(JobSpec {
             backoff_limit: Some(JOB_BACKOFF_LIMIT),
             ttl_seconds_after_finished: Some(JOB_TTL_AFTER_FINISHED),
-            template: pod_template(node_name, scenario, experiment_id, duration, parameters_json, config),
+            template: pod_template(
+                node_name,
+                scenario,
+                experiment_id,
+                duration,
+                parameters_json,
+                config,
+            ),
             ..Default::default()
         }),
         ..Default::default()
@@ -128,7 +139,12 @@ fn runner_container(
         name: "chaos-runner".to_string(),
         image: Some(config.runner_image.clone()),
         args: Some(vec!["--mode".to_string(), "runner".to_string()]),
-        env: Some(runner_env_vars(experiment_id, scenario, duration, parameters_json)),
+        env: Some(runner_env_vars(
+            experiment_id,
+            scenario,
+            duration,
+            parameters_json,
+        )),
         ports: Some(vec![ContainerPort {
             container_port: config.metrics_port,
             name: Some("metrics".to_string()),
@@ -156,12 +172,21 @@ fn pod_template(
 ) -> PodTemplateSpec {
     PodTemplateSpec {
         metadata: Some(ObjectMeta {
-            labels: Some(BTreeMap::from([("app".to_string(), "chimp-chaos-runner".to_string())])),
+            labels: Some(BTreeMap::from([(
+                "app".to_string(),
+                "chimp-chaos-runner".to_string(),
+            )])),
             annotations: Some(prometheus_annotations(config.metrics_port)),
             ..Default::default()
         }),
         spec: Some(PodSpec {
-            containers: vec![runner_container(scenario, experiment_id, duration, parameters_json, config)],
+            containers: vec![runner_container(
+                scenario,
+                experiment_id,
+                duration,
+                parameters_json,
+                config,
+            )],
             node_name: Some(node_name.to_string()),
             restart_policy: Some("Never".to_string()),
             service_account_name: Some("chimp-chaos-runner".to_string()),

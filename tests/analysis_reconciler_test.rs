@@ -67,9 +67,10 @@ impl AnalysisKubeClient for MockAnalysisKube {
         _name: &str,
         status: &ChaosAnalysisStatus,
     ) -> Result<(), OperatorError> {
-        *self.patched.lock().map_err(|e| {
-            OperatorError::Analysis(e.to_string())
-        })? = Some(status.clone());
+        *self
+            .patched
+            .lock()
+            .map_err(|e| OperatorError::Analysis(e.to_string()))? = Some(status.clone());
         Ok(())
     }
 }
@@ -157,15 +158,16 @@ fn completed_analysis() -> ChaosAnalysis {
 #[tokio::test]
 async fn analysis_skips_completed() {
     let a = completed_analysis();
-    let kube = MockAnalysisKube::with_completed_experiment(
-        "2026-01-01T10:00:00Z",
-        "2026-01-01T10:05:00Z",
-    );
+    let kube =
+        MockAnalysisKube::with_completed_experiment("2026-01-01T10:00:00Z", "2026-01-01T10:05:00Z");
     let prom = MockAnalysisProm::new(0.1, 0.2);
 
     reconcile_analysis(&a, &kube, &prom).await.unwrap();
 
-    assert!(kube.patched_status().is_none(), "should not patch already completed");
+    assert!(
+        kube.patched_status().is_none(),
+        "should not patch already completed"
+    );
 }
 
 #[tokio::test]
@@ -191,16 +193,18 @@ async fn analysis_fails_when_experiment_not_found() {
 
     let status = kube.patched_status().expect("should patch status");
     assert_eq!(status.phase, AnalysisPhase::Failed);
-    assert!(status.message.as_deref().unwrap_or("").contains("cannot get experiment"));
+    assert!(status
+        .message
+        .as_deref()
+        .unwrap_or("")
+        .contains("cannot get experiment"));
 }
 
 #[tokio::test]
 async fn analysis_latency_up_pass() {
     let a = analysis(DegradationDirection::Up, 30);
-    let kube = MockAnalysisKube::with_completed_experiment(
-        "2026-01-01T10:00:00Z",
-        "2026-01-01T10:05:00Z",
-    );
+    let kube =
+        MockAnalysisKube::with_completed_experiment("2026-01-01T10:00:00Z", "2026-01-01T10:05:00Z");
     // 20% increase — within 30% threshold
     let prom = MockAnalysisProm::new(0.10, 0.12);
 
@@ -217,10 +221,8 @@ async fn analysis_latency_up_pass() {
 #[tokio::test]
 async fn analysis_latency_up_fail() {
     let a = analysis(DegradationDirection::Up, 30);
-    let kube = MockAnalysisKube::with_completed_experiment(
-        "2026-01-01T10:00:00Z",
-        "2026-01-01T10:05:00Z",
-    );
+    let kube =
+        MockAnalysisKube::with_completed_experiment("2026-01-01T10:00:00Z", "2026-01-01T10:05:00Z");
     // 50% increase — exceeds 30% threshold
     let prom = MockAnalysisProm::new(0.10, 0.15);
 
@@ -235,10 +237,8 @@ async fn analysis_latency_up_fail() {
 #[tokio::test]
 async fn analysis_throughput_down_pass() {
     let a = analysis(DegradationDirection::Down, 30);
-    let kube = MockAnalysisKube::with_completed_experiment(
-        "2026-01-01T10:00:00Z",
-        "2026-01-01T10:05:00Z",
-    );
+    let kube =
+        MockAnalysisKube::with_completed_experiment("2026-01-01T10:00:00Z", "2026-01-01T10:05:00Z");
     // RPS dropped 10% — within 30% threshold
     let prom = MockAnalysisProm::new(100.0, 90.0);
 
@@ -253,10 +253,8 @@ async fn analysis_throughput_down_pass() {
 #[tokio::test]
 async fn analysis_throughput_down_fail() {
     let a = analysis(DegradationDirection::Down, 30);
-    let kube = MockAnalysisKube::with_completed_experiment(
-        "2026-01-01T10:00:00Z",
-        "2026-01-01T10:05:00Z",
-    );
+    let kube =
+        MockAnalysisKube::with_completed_experiment("2026-01-01T10:00:00Z", "2026-01-01T10:05:00Z");
     // RPS dropped 80% — exceeds 30% threshold
     let prom = MockAnalysisProm::new(100.0, 20.0);
 
@@ -271,10 +269,8 @@ async fn analysis_throughput_down_fail() {
 #[tokio::test]
 async fn analysis_no_degradation_when_metric_improves() {
     let a = analysis(DegradationDirection::Up, 30);
-    let kube = MockAnalysisKube::with_completed_experiment(
-        "2026-01-01T10:00:00Z",
-        "2026-01-01T10:05:00Z",
-    );
+    let kube =
+        MockAnalysisKube::with_completed_experiment("2026-01-01T10:00:00Z", "2026-01-01T10:05:00Z");
     // Latency decreased — no degradation in "up" direction
     let prom = MockAnalysisProm::new(0.10, 0.05);
 
@@ -288,25 +284,25 @@ async fn analysis_no_degradation_when_metric_improves() {
 #[tokio::test]
 async fn analysis_prometheus_error_fails_gracefully() {
     let a = analysis(DegradationDirection::Up, 30);
-    let kube = MockAnalysisKube::with_completed_experiment(
-        "2026-01-01T10:00:00Z",
-        "2026-01-01T10:05:00Z",
-    );
+    let kube =
+        MockAnalysisKube::with_completed_experiment("2026-01-01T10:00:00Z", "2026-01-01T10:05:00Z");
 
     reconcile_analysis(&a, &kube, &FailingProm).await.unwrap();
 
     let status = kube.patched_status().expect("should patch status");
     assert_eq!(status.phase, AnalysisPhase::Failed);
-    assert!(status.message.as_deref().unwrap_or("").contains("query failed"));
+    assert!(status
+        .message
+        .as_deref()
+        .unwrap_or("")
+        .contains("query failed"));
 }
 
 #[tokio::test]
 async fn analysis_impact_clamped_to_100() {
     let a = analysis(DegradationDirection::Up, 30);
-    let kube = MockAnalysisKube::with_completed_experiment(
-        "2026-01-01T10:00:00Z",
-        "2026-01-01T10:05:00Z",
-    );
+    let kube =
+        MockAnalysisKube::with_completed_experiment("2026-01-01T10:00:00Z", "2026-01-01T10:05:00Z");
     // 900% increase — clamped to 100
     let prom = MockAnalysisProm::new(0.01, 0.10);
 
