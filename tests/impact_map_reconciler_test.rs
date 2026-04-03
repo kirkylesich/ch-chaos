@@ -476,6 +476,90 @@ async fn impact_map_empty_prometheus_result() {
     assert_eq!(summary.total_affected, 0);
 }
 
+// ── Error rate scoring tests ──
+
+#[tokio::test]
+async fn impact_map_error_rate_zero_baseline_uses_absolute() {
+    let im = impact_map(0); // see all
+    let kube = MockImpactMapKube::with_completed_experiment(
+        "2026-01-01T10:00:00Z",
+        "2026-01-01T10:05:00Z",
+    );
+    // Error rate: 0 → 0.0015 (0.15%) — should NOT be impact 100
+    // Latency unchanged, throughput unchanged
+    let prom = MockImpactMapProm::new().with_service(
+        "frontend",
+        "production",
+        0.10,
+        0.10,
+        0.0,
+        0.0015,
+        100.0,
+        100.0,
+    );
+
+    reconcile_impact_map(&im, &kube, &prom).await.unwrap();
+
+    let status = kube.patched_status().expect("should patch status");
+    let svc = &status.affected_services[0];
+    // 0.15% error rate → absolute impact 0 (rounds down from 0.15)
+    assert_eq!(svc.metrics.error_rate.impact_score, 0);
+    assert_eq!(svc.max_impact, 0); // no significant impact
+}
+
+#[tokio::test]
+async fn impact_map_error_rate_zero_baseline_high_errors() {
+    let im = impact_map(0);
+    let kube = MockImpactMapKube::with_completed_experiment(
+        "2026-01-01T10:00:00Z",
+        "2026-01-01T10:05:00Z",
+    );
+    // Error rate: 0 → 0.10 (10%) — significant, should show impact 10
+    let prom = MockImpactMapProm::new().with_service(
+        "frontend",
+        "production",
+        0.10,
+        0.10,
+        0.0,
+        0.10,
+        100.0,
+        100.0,
+    );
+
+    reconcile_impact_map(&im, &kube, &prom).await.unwrap();
+
+    let status = kube.patched_status().expect("should patch status");
+    let svc = &status.affected_services[0];
+    assert_eq!(svc.metrics.error_rate.impact_score, 10);
+}
+
+#[tokio::test]
+async fn impact_map_error_rate_nonzero_baseline_uses_relative() {
+    let im = impact_map(0);
+    let kube = MockImpactMapKube::with_completed_experiment(
+        "2026-01-01T10:00:00Z",
+        "2026-01-01T10:05:00Z",
+    );
+    // Error rate: 0.01 (1%) → 0.02 (2%) — 100% relative increase
+    let prom = MockImpactMapProm::new().with_service(
+        "frontend",
+        "production",
+        0.10,
+        0.10,
+        0.01,
+        0.02,
+        100.0,
+        100.0,
+    );
+
+    reconcile_impact_map(&im, &kube, &prom).await.unwrap();
+
+    let status = kube.patched_status().expect("should patch status");
+    let svc = &status.affected_services[0];
+    // 1% → 2% = 100% relative increase → impact 100
+    assert_eq!(svc.metrics.error_rate.impact_score, 100);
+}
+
 // ── PromQL builder tests ──
 
 #[test]

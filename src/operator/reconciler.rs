@@ -198,7 +198,11 @@ pub async fn reconcile(
         }
         Phase::Succeeded | Phase::Failed => {
             handle_terminal(experiment, kube).await?;
-            Ok(ReconcileResult::Requeue(requeue_duration(status.phase)))
+            if status.cleanup_done {
+                Ok(ReconcileResult::Done)
+            } else {
+                Ok(ReconcileResult::Requeue(requeue_duration(Phase::Running)))
+            }
         }
     }
 }
@@ -218,12 +222,8 @@ async fn handle_deletion(
     }
 
     if experiment.spec.scenario.is_edge_chaos() {
-        if let Some(eid) = &status.experiment_id {
-            let vs_name = virtual_service_name(eid);
-            let _ = kube
-                .delete_virtual_service(target_namespace(experiment), &vs_name)
-                .await;
-        }
+        let target_ns = target_namespace(experiment);
+        let _ = cleanup_virtual_services(kube, target_ns, name).await;
     }
 
     kube.remove_finalizer(ns, name).await
@@ -244,7 +244,16 @@ async fn handle_pending(
         return patch_failed(kube, ns, name, &e.to_string()).await;
     }
 
-    let eid = ExperimentId::new().to_string();
+    // Deterministic experiment_id: reuse from status if already set, otherwise derive from K8s UID.
+    // This prevents duplicate VS creation on concurrent reconciles.
+    let status = experiment.status.as_ref().cloned().unwrap_or_default();
+    let eid = status.experiment_id.unwrap_or_else(|| {
+        experiment
+            .metadata
+            .uid
+            .clone()
+            .unwrap_or_else(|| ExperimentId::new().to_string())
+    });
 
     if experiment.spec.scenario.is_edge_chaos() {
         handle_pending_edge(experiment, kube, edge_resolver, &eid).await
@@ -293,7 +302,11 @@ async fn handle_pending_pod(
             &config.job_builder,
         );
         let job_name = job.metadata.name.clone().unwrap_or_default();
-        kube.create_job(ns, &job).await?;
+        if let Err(e) = kube.create_job(ns, &job).await {
+            if !is_already_exists(&e) {
+                return Err(e);
+            }
+        }
         job_names.push(job_name);
     }
 
@@ -385,7 +398,7 @@ async fn handle_pending_edge(
         }
     };
 
-    // 5. Create VirtualService
+    // 5. Create VirtualService (idempotent — ignore AlreadyExists)
     let vs_spec = VirtualServiceSpec {
         name: virtual_service_name(experiment_id),
         namespace: target_ns.to_string(),
@@ -396,7 +409,12 @@ async fn handle_pending_edge(
         fault,
     };
     let vs_json = build_virtual_service_json(&vs_spec);
-    kube.create_virtual_service(target_ns, &vs_json).await?;
+    if let Err(e) = kube.create_virtual_service(target_ns, &vs_json).await {
+        if !is_already_exists(&e) {
+            return Err(e);
+        }
+        tracing::info!("VirtualService already exists, skipping creation");
+    }
 
     let status = ChaosExperimentStatus {
         phase: Phase::Running,
@@ -508,11 +526,10 @@ async fn handle_terminal(
     }
 
     if experiment.spec.scenario.is_edge_chaos() {
-        if let Some(eid) = &status.experiment_id {
-            let vs_name = virtual_service_name(eid);
-            let _ = kube
-                .delete_virtual_service(target_namespace(experiment), &vs_name)
-                .await;
+        let target_ns = target_namespace(experiment);
+        if let Err(e) = cleanup_virtual_services(kube, target_ns, name).await {
+            tracing::warn!(%e, name, "failed to cleanup VirtualServices, will retry");
+            return Ok(());
         }
     }
 
@@ -521,6 +538,34 @@ async fn handle_terminal(
         ..status
     };
     kube.patch_experiment_status(ns, name, &new_status).await
+}
+
+// ── VS cleanup by label ──
+
+async fn cleanup_virtual_services(
+    kube: &dyn KubeClient,
+    target_ns: &str,
+    experiment_name: &str,
+) -> Result<(), OperatorError> {
+    let all_vs = kube
+        .list_virtual_services_for_host(target_ns, "")
+        .await?;
+    for vs in &all_vs {
+        if is_chaos_managed(&vs.labels)
+            && vs
+                .labels
+                .get(EXPERIMENT_LABEL)
+                .map(|v| v.as_str())
+                == Some(experiment_name)
+        {
+            if let Err(e) = kube.delete_virtual_service(target_ns, &vs.name).await {
+                if !is_not_found(&e) {
+                    return Err(e);
+                }
+            }
+        }
+    }
+    Ok(())
 }
 
 // ── Shared helper ──

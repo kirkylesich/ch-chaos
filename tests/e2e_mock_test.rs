@@ -25,6 +25,7 @@ struct StatefulKube {
     target_nodes: Vec<String>,
     created_jobs: Mutex<Vec<String>>,
     job_results: Mutex<Vec<Job>>,
+    created_vs: Mutex<Vec<VirtualServiceInfo>>,
 }
 
 impl StatefulKube {
@@ -36,6 +37,7 @@ impl StatefulKube {
             target_nodes: vec!["node-1".to_string(), "node-2".to_string()],
             created_jobs: Mutex::new(vec![]),
             job_results: Mutex::new(vec![]),
+            created_vs: Mutex::new(vec![]),
         }
     }
 
@@ -134,9 +136,22 @@ impl KubeClient for StatefulKube {
     async fn create_virtual_service(
         &self,
         _ns: &str,
-        _vs_json: &serde_json::Value,
+        vs_json: &serde_json::Value,
     ) -> Result<(), OperatorError> {
         self.record("create_virtual_service");
+        let name = vs_json
+            .pointer("/metadata/name")
+            .and_then(|v| v.as_str())
+            .unwrap_or("")
+            .to_string();
+        let labels: BTreeMap<String, String> = vs_json
+            .pointer("/metadata/labels")
+            .and_then(|v| serde_json::from_value(v.clone()).ok())
+            .unwrap_or_default();
+        self.created_vs
+            .lock()
+            .unwrap()
+            .push(VirtualServiceInfo { name, labels });
         Ok(())
     }
 
@@ -146,11 +161,12 @@ impl KubeClient for StatefulKube {
         _host: &str,
     ) -> Result<Vec<VirtualServiceInfo>, OperatorError> {
         self.record("list_virtual_services_for_host");
-        Ok(vec![])
+        Ok(self.created_vs.lock().unwrap().clone())
     }
 
     async fn delete_virtual_service(&self, _ns: &str, name: &str) -> Result<(), OperatorError> {
         self.record(&format!("delete_virtual_service:{name}"));
+        self.created_vs.lock().unwrap().retain(|vs| vs.name != name);
         Ok(())
     }
 
@@ -381,20 +397,21 @@ async fn e2e_pod_chaos_full_lifecycle() {
         kube.current_experiment_status(),
     );
     let result = reconcile(&exp, &kube, None, &config).await.unwrap();
-    assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(300)));
+    assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
     assert!(kube.current_experiment_status().cleanup_done);
     assert!(kube
         .get_calls()
         .iter()
         .any(|c| c.starts_with("delete_job:")));
 
-    // ── Phase 6: Succeeded + cleanup_done → no-op ──
+    // ── Phase 6: Succeeded + cleanup_done → done (no more requeue) ──
     let exp = with_status(
         pod_experiment_no_finalizer(),
         kube.current_experiment_status(),
     );
     let calls_before = kube.get_calls().len();
-    reconcile(&exp, &kube, None, &config).await.unwrap();
+    let result = reconcile(&exp, &kube, None, &config).await.unwrap();
+    assert_eq!(result, ReconcileResult::Done);
     let calls_after = kube.get_calls().len();
     // Only list_jobs call, no more delete_job or patch_status
     assert!(

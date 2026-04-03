@@ -229,6 +229,16 @@ pub enum RunnerError {
     Command(#[from] std::io::Error),
 }
 
+// ── Error helpers ──
+
+pub fn is_not_found(err: &OperatorError) -> bool {
+    matches!(err, OperatorError::Kube(kube::Error::Api(resp)) if resp.code == 404)
+}
+
+pub fn is_already_exists(err: &OperatorError) -> bool {
+    matches!(err, OperatorError::Kube(kube::Error::Api(resp)) if resp.code == 409)
+}
+
 // ── Constants ──
 
 pub const FINALIZER_NAME: &str = "chaos.io/cleanup";

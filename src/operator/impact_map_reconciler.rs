@@ -285,7 +285,7 @@ pub async fn reconcile_impact_map(
         let thr_d = get_value(&throughput_during, svc);
 
         let (lat_score, _, _) = calculate_impact(lat_b, lat_d, DegradationDirection::Up, 100);
-        let (err_score, _, _) = calculate_impact(err_b, err_d, DegradationDirection::Up, 100);
+        let err_score = error_rate_impact(err_b, err_d);
         let (thr_score, _, _) = calculate_impact(thr_b, thr_d, DegradationDirection::Down, 100);
 
         let max_impact = lat_score.max(err_score).max(thr_score);
@@ -358,6 +358,21 @@ fn collect_all_services(maps: &[&HashMap<ServiceKey, f64>]) -> Vec<ServiceKey> {
             .then(a.namespace.cmp(&b.namespace))
     });
     result
+}
+
+/// Error rate impact: uses absolute difference (in percentage points) when baseline is zero.
+/// This avoids the "0 → 0.15% = 100% impact" problem — 0.15% error rate is not catastrophic.
+/// When baseline > 0, falls back to standard relative percentage calculation.
+fn error_rate_impact(baseline: f64, during: f64) -> u32 {
+    if baseline == 0.0 {
+        // Absolute: error rate is already a ratio (0.0 to 1.0), convert to percentage points
+        // 0.001 (0.1%) → impact 0, 0.05 (5%) → impact 5, 1.0 (100%) → impact 100
+        let pct = during * 100.0;
+        (pct.round() as u32).min(100)
+    } else {
+        let (score, _, _) = calculate_impact(baseline, during, DegradationDirection::Up, 100);
+        score
+    }
 }
 
 fn get_value(map: &HashMap<ServiceKey, f64>, key: &ServiceKey) -> f64 {

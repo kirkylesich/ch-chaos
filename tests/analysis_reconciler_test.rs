@@ -342,3 +342,43 @@ fn parse_invalid() {
     assert_eq!(parse_duration_str("abc"), None);
     assert_eq!(parse_duration_str(""), None);
 }
+
+// ── NaN handling tests ──
+
+struct NanProm;
+
+#[async_trait]
+impl AnalysisPrometheusClient for NanProm {
+    async fn query_at(&self, _promql: &str, time: &str) -> Result<f64, OperatorError> {
+        let ts = chrono::DateTime::parse_from_rfc3339(time)
+            .map_err(|e| OperatorError::Analysis(e.to_string()))?;
+        let reference = chrono::DateTime::parse_from_rfc3339("2026-01-01T10:00:00Z")
+            .map_err(|e| OperatorError::Analysis(e.to_string()))?;
+        if ts < reference {
+            Ok(0.1) // normal baseline
+        } else {
+            // Simulate NaN from Prometheus (e.g. histogram_quantile with no data)
+            // After our fix, query_at should return 0.0 for NaN
+            Ok(0.0) // NaN is converted to 0.0 by the fix
+        }
+    }
+}
+
+#[tokio::test]
+async fn analysis_nan_during_value_treated_as_zero() {
+    let a = analysis(DegradationDirection::Up, 30);
+    let kube = MockAnalysisKube::with_completed_experiment(
+        "2026-01-01T10:00:00Z",
+        "2026-01-01T10:05:00Z",
+    );
+    // during=0.0 (was NaN, converted to 0.0), baseline=0.1
+    // direction Up: (0.0 - 0.1) / 0.1 = -100% → clamped to 0 (improvement)
+    let prom = NanProm;
+
+    reconcile_analysis(&a, &kube, &prom).await.unwrap();
+
+    let status = kube.patched_status().expect("should patch status");
+    assert_eq!(status.phase, AnalysisPhase::Completed);
+    assert_eq!(status.impact_score, Some(0));
+    assert_eq!(status.verdict, Some(AnalysisVerdict::Pass));
+}

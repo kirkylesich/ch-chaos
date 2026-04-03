@@ -52,7 +52,10 @@ pub struct HttpPrometheusClient {
 impl HttpPrometheusClient {
     pub fn new(base_url: &str) -> Self {
         Self {
-            client: reqwest::Client::new(),
+            client: reqwest::Client::builder()
+                .timeout(std::time::Duration::from_secs(30))
+                .build()
+                .unwrap_or_default(),
             base_url: base_url.trim_end_matches('/').to_string(),
         }
     }
@@ -115,7 +118,10 @@ impl AnalysisPrometheusClient for HttpPrometheusClient {
         resp.data
             .result
             .first()
-            .map(|m| m.value.1.parse::<f64>().unwrap_or(0.0))
+            .map(|m| {
+                let v = m.value.1.parse::<f64>().unwrap_or(0.0);
+                if v.is_nan() { 0.0 } else { v }
+            })
             .ok_or_else(|| OperatorError::Prometheus("empty query result".into()))
     }
 }

@@ -10,6 +10,14 @@ use chimp_chaos::operator::crd::{ChaosExperiment, ChaosExperimentSpec, ChaosExpe
 use chimp_chaos::operator::reconciler::*;
 use chimp_chaos::operator::types::*;
 
+fn kube_api_error(code: u16) -> OperatorError {
+    OperatorError::Kube(kube::Error::Api(
+        kube::core::Status::failure("mock error", "MockError")
+            .with_code(code)
+            .boxed(),
+    ))
+}
+
 // ── Call tracking ──
 
 #[derive(Debug, Clone, PartialEq)]
@@ -42,6 +50,9 @@ struct MockKube {
     service_selector: Result<BTreeMap<String, String>, OperatorError>,
     existing_vs: Vec<VirtualServiceInfo>,
     jobs: Vec<Job>,
+    create_job_error: Option<u16>,
+    create_vs_error: Option<u16>,
+    delete_vs_error: Option<u16>,
 }
 
 impl MockKube {
@@ -53,6 +64,9 @@ impl MockKube {
             service_selector: Ok(BTreeMap::from([("app".into(), "payment".into())])),
             existing_vs: vec![],
             jobs: vec![],
+            create_job_error: None,
+            create_vs_error: None,
+            delete_vs_error: None,
         }
     }
 
@@ -87,6 +101,19 @@ impl MockKube {
         }
     }
 
+    fn with_chaos_vs(experiment_name: &str) -> Self {
+        Self {
+            existing_vs: vec![VirtualServiceInfo {
+                name: "chaos-edge-test1234".to_string(),
+                labels: BTreeMap::from([
+                    (EXPERIMENT_LABEL.to_string(), experiment_name.to_string()),
+                    (MANAGED_BY_LABEL.to_string(), MANAGED_BY_VALUE.to_string()),
+                ]),
+            }],
+            ..Self::new()
+        }
+    }
+
     fn calls(&self) -> Vec<Call> {
         self.calls.lock().unwrap().clone()
     }
@@ -104,6 +131,9 @@ impl KubeClient for MockKube {
             .lock()
             .unwrap()
             .push(Call::CreateJob(name.clone()));
+        if let Some(code) = self.create_job_error {
+            return Err(kube_api_error(code));
+        }
         let env_vars: std::collections::HashMap<String, String> = job
             .spec
             .as_ref()
@@ -172,6 +202,9 @@ impl KubeClient for MockKube {
             .lock()
             .unwrap()
             .push(Call::CreateVirtualService(ns.into()));
+        if let Some(code) = self.create_vs_error {
+            return Err(kube_api_error(code));
+        }
         Ok(())
     }
 
@@ -192,6 +225,9 @@ impl KubeClient for MockKube {
             .lock()
             .unwrap()
             .push(Call::DeleteVirtualService(ns.into(), name.into()));
+        if let Some(code) = self.delete_vs_error {
+            return Err(kube_api_error(code));
+        }
         Ok(())
     }
 
@@ -750,7 +786,7 @@ async fn reconcile_terminal_does_cleanup() {
 
     let result = reconcile(&exp, &kube, None, &config).await.unwrap();
 
-    assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(300)));
+    assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
     assert!(kube.has_call(&Call::DeleteJob(
         "default".into(),
         "chaos-runner-abc12345-node-1".into()
@@ -770,8 +806,9 @@ async fn reconcile_terminal_skips_cleanup_if_done() {
     let kube = MockKube::new();
     let config = default_config();
 
-    reconcile(&exp, &kube, None, &config).await.unwrap();
+    let result = reconcile(&exp, &kube, None, &config).await.unwrap();
 
+    assert_eq!(result, ReconcileResult::Done);
     assert!(!kube
         .calls()
         .iter()
@@ -784,7 +821,7 @@ async fn reconcile_deletion_edge_deletes_vs() {
     exp.metadata.deletion_timestamp = Some(k8s_openapi::apimachinery::pkg::apis::meta::v1::Time(
         k8s_openapi::jiff::Timestamp::now(),
     ));
-    let kube = MockKube::new();
+    let kube = MockKube::with_chaos_vs("edge-exp");
     let config = default_config();
 
     reconcile(&exp, &kube, None, &config).await.unwrap();
@@ -894,4 +931,202 @@ async fn reconcile_pending_pod_without_parameters_still_injects_namespace() {
         Some("production"),
         "namespace must be injected even when spec.parameters is None"
     );
+}
+
+// ── Idempotency & error handling tests ──
+
+#[tokio::test]
+async fn reconcile_pending_pod_job_already_exists_is_ignored() {
+    let exp = pod_experiment(Phase::Pending);
+    let kube = MockKube {
+        create_job_error: Some(409), // AlreadyExists
+        ..MockKube::new()
+    };
+    let config = default_config();
+
+    let result = reconcile(&exp, &kube, None, &config).await.unwrap();
+
+    // Should succeed despite AlreadyExists — idempotent
+    assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
+    assert!(kube
+        .calls()
+        .iter()
+        .any(|c| matches!(c, Call::PatchStatus(_, _, Phase::Running))));
+}
+
+#[tokio::test]
+async fn reconcile_pending_pod_job_real_error_propagates() {
+    let exp = pod_experiment(Phase::Pending);
+    let kube = MockKube {
+        create_job_error: Some(500), // Internal Server Error
+        ..MockKube::new()
+    };
+    let config = default_config();
+
+    let result = reconcile(&exp, &kube, None, &config).await;
+
+    // Non-409 errors should propagate
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn reconcile_pending_edge_vs_already_exists_is_ignored() {
+    let exp = edge_experiment(Phase::Pending);
+    let kube = MockKube {
+        create_vs_error: Some(409), // AlreadyExists
+        ..MockKube::new()
+    };
+    let resolver = MockEdgeResolver::ok();
+    let config = default_config();
+
+    let result = reconcile(&exp, &kube, Some(&resolver), &config)
+        .await
+        .unwrap();
+
+    // Should succeed — VS already exists, just patch status
+    assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
+    assert!(kube
+        .calls()
+        .iter()
+        .any(|c| matches!(c, Call::PatchStatus(_, _, Phase::Running))));
+}
+
+#[tokio::test]
+async fn reconcile_pending_edge_vs_real_error_propagates() {
+    let exp = edge_experiment(Phase::Pending);
+    let kube = MockKube {
+        create_vs_error: Some(500),
+        ..MockKube::new()
+    };
+    let resolver = MockEdgeResolver::ok();
+    let config = default_config();
+
+    let result = reconcile(&exp, &kube, Some(&resolver), &config).await;
+
+    assert!(result.is_err());
+}
+
+#[tokio::test]
+async fn reconcile_terminal_cleanup_retries_on_vs_delete_failure() {
+    let exp = edge_experiment(Phase::Succeeded);
+    let kube = MockKube {
+        delete_vs_error: Some(500), // transient error
+        existing_vs: vec![VirtualServiceInfo {
+            name: "chaos-edge-test".to_string(),
+            labels: BTreeMap::from([
+                (EXPERIMENT_LABEL.to_string(), "edge-exp".to_string()),
+                (MANAGED_BY_LABEL.to_string(), MANAGED_BY_VALUE.to_string()),
+            ]),
+        }],
+        ..MockKube::new()
+    };
+    let config = default_config();
+
+    let result = reconcile(&exp, &kube, None, &config).await.unwrap();
+
+    // Should NOT mark cleanup_done — will retry next reconcile
+    assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
+    // PatchStatus should NOT be called (cleanup_done not set)
+    assert!(!kube
+        .calls()
+        .iter()
+        .any(|c| matches!(c, Call::PatchStatus(_, _, _))));
+}
+
+#[tokio::test]
+async fn reconcile_terminal_cleanup_succeeds_on_vs_not_found() {
+    let exp = edge_experiment(Phase::Succeeded);
+    let kube = MockKube {
+        delete_vs_error: Some(404), // NotFound — already deleted
+        existing_vs: vec![VirtualServiceInfo {
+            name: "chaos-edge-test".to_string(),
+            labels: BTreeMap::from([
+                (EXPERIMENT_LABEL.to_string(), "edge-exp".to_string()),
+                (MANAGED_BY_LABEL.to_string(), MANAGED_BY_VALUE.to_string()),
+            ]),
+        }],
+        ..MockKube::new()
+    };
+    let config = default_config();
+
+    let result = reconcile(&exp, &kube, None, &config).await.unwrap();
+
+    // 404 should be treated as success — VS already gone
+    assert_eq!(result, ReconcileResult::Requeue(Duration::from_secs(5)));
+    // cleanup_done should be set
+    assert!(kube
+        .calls()
+        .iter()
+        .any(|c| matches!(c, Call::PatchStatus(_, _, Phase::Succeeded))));
+}
+
+#[tokio::test]
+async fn reconcile_terminal_cleanup_done_returns_done() {
+    let mut exp = edge_experiment(Phase::Succeeded);
+    if let Some(status) = exp.status.as_mut() {
+        status.cleanup_done = true;
+    }
+    let kube = MockKube::new();
+    let config = default_config();
+
+    let result = reconcile(&exp, &kube, None, &config).await.unwrap();
+
+    // After cleanup_done, should stop requeueing
+    assert_eq!(result, ReconcileResult::Done);
+    // No delete calls — already cleaned up
+    assert!(!kube
+        .calls()
+        .iter()
+        .any(|c| matches!(c, Call::DeleteVirtualService(_, _))));
+}
+
+#[tokio::test]
+async fn reconcile_experiment_id_deterministic_from_uid() {
+    // Two reconciles of same experiment should produce same experiment_id
+    let mut exp = edge_experiment(Phase::Pending);
+    exp.metadata.uid = Some("stable-uid-1234".into());
+    if let Some(status) = exp.status.as_mut() {
+        status.experiment_id = None;
+    }
+    let kube = MockKube::new();
+    let resolver = MockEdgeResolver::ok();
+    let config = default_config();
+
+    reconcile(&exp, &kube, Some(&resolver), &config)
+        .await
+        .unwrap();
+
+    // VS name should be based on uid, not random
+    let vs_calls = kube
+        .calls()
+        .iter()
+        .filter(|c| matches!(c, Call::CreateVirtualService(_)))
+        .count();
+    assert_eq!(vs_calls, 1, "should create exactly one VS");
+}
+
+#[tokio::test]
+async fn reconcile_experiment_id_reused_from_status() {
+    // If status already has experiment_id, reuse it (don't generate new one)
+    let mut exp = edge_experiment(Phase::Pending);
+    exp.metadata.uid = Some("some-uid".into());
+    if let Some(status) = exp.status.as_mut() {
+        status.experiment_id = Some("existing-id-12345".into());
+    }
+    let kube = MockKube::new();
+    let resolver = MockEdgeResolver::ok();
+    let config = default_config();
+
+    reconcile(&exp, &kube, Some(&resolver), &config)
+        .await
+        .unwrap();
+
+    // VS name should use the existing experiment_id, not uid
+    let vs_calls: Vec<_> = kube
+        .calls()
+        .iter()
+        .filter(|c| matches!(c, Call::CreateVirtualService(_)))
+        .cloned()
+        .collect();
+    assert_eq!(vs_calls.len(), 1);
 }

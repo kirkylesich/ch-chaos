@@ -20,7 +20,7 @@ run:
 	RUST_LOG=debug \
 	PROMETHEUS_URL=http://localhost:9090 \
 	RUNNER_IMAGE=$(IMAGE):$(TAG) \
-	cargo run -- --mode operator
+	cargo run --bin chimp-chaos -- --mode operator
 
 run-port-forward:
 	kubectl port-forward svc/prometheus-kube-prometheus-stack-prometheus -n monitoring 9090:9090
