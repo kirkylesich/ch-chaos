@@ -19,7 +19,7 @@ futures = "0.3"
 async-trait = "0.1"
 
 # HTTP server (runner metrics endpoint)
-actix-web = "4"
+axum = "0.8"
 
 # Serialization
 serde = { version = "1", features = ["derive"] }

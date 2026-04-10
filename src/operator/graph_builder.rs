@@ -4,7 +4,9 @@ use async_trait::async_trait;
 use serde::Deserialize;
 
 use super::analysis_reconciler::AnalysisPrometheusClient;
-use super::impact_map_reconciler::{ImpactMapPrometheusClient, ServiceKey};
+use super::impact_map_reconciler::{
+    ImpactMapGraphClient, ImpactMapPrometheusClient, ServiceGraph, ServiceKey,
+};
 use super::types::{EdgeInfo, OperatorError, DEFAULT_GRAPH_LOOKBACK, DEFAULT_GRAPH_MIN_RPS};
 
 // ── Prometheus client trait (for mocking) ──
@@ -170,6 +172,55 @@ impl ImpactMapPrometheusClient for HttpPrometheusClient {
             );
         }
         Ok(map)
+    }
+}
+
+#[async_trait]
+impl ImpactMapGraphClient for HttpPrometheusClient {
+    async fn query_service_graph(
+        &self,
+        _namespace_filter: &[String],
+    ) -> Result<ServiceGraph, OperatorError> {
+        let promql = build_edges_query(DEFAULT_GRAPH_LOOKBACK);
+        let result = PrometheusClient::query(self, &promql).await?;
+        Ok(build_service_graph(&result.data.result))
+    }
+}
+
+fn build_service_graph(metrics: &[PrometheusMetric]) -> ServiceGraph {
+    let mut adjacency: HashMap<ServiceKey, Vec<ServiceKey>> = HashMap::new();
+    let mut service_to_workload: HashMap<(String, String), ServiceKey> = HashMap::new();
+
+    for m in metrics {
+        let src_workload = m.label("source_workload").to_string();
+        let src_ns = m.label("source_workload_namespace").to_string();
+        let dst_workload = m.label("destination_workload").to_string();
+        let dst_ns = m.label("destination_workload_namespace").to_string();
+        let dst_service = m.label("destination_service_name").to_string();
+
+        if src_workload.is_empty() || dst_workload.is_empty() {
+            continue;
+        }
+
+        let src = ServiceKey {
+            workload: src_workload,
+            namespace: src_ns,
+        };
+        let dst = ServiceKey {
+            workload: dst_workload.clone(),
+            namespace: dst_ns.clone(),
+        };
+
+        adjacency.entry(src).or_default().push(dst.clone());
+
+        if !dst_service.is_empty() {
+            service_to_workload.insert((dst_service, dst_ns), dst);
+        }
+    }
+
+    ServiceGraph {
+        adjacency,
+        service_to_workload,
     }
 }
 

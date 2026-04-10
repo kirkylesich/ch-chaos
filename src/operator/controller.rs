@@ -104,8 +104,13 @@ async fn reconcile_impact_map_handler(
     impact_map: Arc<ChaosImpactMap>,
     ctx: Arc<ImpactMapContext>,
 ) -> Result<Action, OperatorError> {
-    impact_map_reconciler::reconcile_impact_map(&impact_map, &ctx.kube_client, &ctx.prom_client)
-        .await?;
+    impact_map_reconciler::reconcile_impact_map(
+        &impact_map,
+        &ctx.kube_client,
+        &ctx.prom_client,
+        Some(&ctx.prom_client as &dyn impact_map_reconciler::ImpactMapGraphClient),
+    )
+    .await?;
     Ok(Action::requeue(Duration::from_secs(300)))
 }
 

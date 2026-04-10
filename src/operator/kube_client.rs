@@ -9,8 +9,8 @@ use serde_json::json;
 
 use super::analysis_reconciler::AnalysisKubeClient;
 use super::crd::{
-    ChaosAnalysis, ChaosAnalysisStatus, ChaosExperiment, ChaosExperimentStatus, ChaosImpactMap,
-    ChaosImpactMapStatus,
+    ChaosAnalysis, ChaosAnalysisStatus, ChaosExperiment, ChaosExperimentSpec,
+    ChaosExperimentStatus, ChaosImpactMap, ChaosImpactMapStatus,
 };
 use super::impact_map_reconciler::ImpactMapKubeClient;
 use super::reconciler::{KubeClient, VirtualServiceInfo};
@@ -213,6 +213,16 @@ impl ImpactMapKubeClient for RealKubeClient {
         let api: Api<ChaosExperiment> = Api::namespaced(self.client.clone(), ns);
         let exp = api.get(name).await?;
         Ok(exp.status.unwrap_or_default())
+    }
+
+    async fn get_experiment_spec(
+        &self,
+        ns: &str,
+        name: &str,
+    ) -> Result<ChaosExperimentSpec, OperatorError> {
+        let api: Api<ChaosExperiment> = Api::namespaced(self.client.clone(), ns);
+        let exp = api.get(name).await?;
+        Ok(exp.spec)
     }
 
     async fn patch_impact_map_status(

@@ -314,10 +314,17 @@ spec:
               affectedServices:
                 items:
                   properties:
-                    maxImpact:
+                    impactScore:
                       format: uint32
                       minimum: 0.0
                       type: integer
+                    impactType:
+                      enum:
+                      - Direct
+                      - Indirect
+                      - null
+                      nullable: true
+                      type: string
                     metrics:
                       properties:
                         errorRate:
@@ -381,7 +388,7 @@ spec:
                     workload:
                       type: string
                   required:
-                  - maxImpact
+                  - impactScore
                   - metrics
                   - namespace
                   - workload

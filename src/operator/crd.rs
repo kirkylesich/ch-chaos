@@ -3,7 +3,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 
 use super::types::{
-    AnalysisPhase, AnalysisVerdict, DegradationDirection, Phase, ScenarioType, Target,
+    AnalysisPhase, AnalysisVerdict, DegradationDirection, ImpactType, Phase, ScenarioType, Target,
 };
 
 // ── ChaosExperiment CRD ──
@@ -182,8 +182,10 @@ pub struct ImpactMapSummary {
 pub struct AffectedService {
     pub workload: String,
     pub namespace: String,
-    #[serde(rename = "maxImpact")]
-    pub max_impact: u32,
+    #[serde(rename = "impactScore")]
+    pub impact_score: u32,
+    #[serde(rename = "impactType", skip_serializing_if = "Option::is_none")]
+    pub impact_type: Option<ImpactType>,
     pub metrics: ServiceMetrics,
 }
 

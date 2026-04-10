@@ -1,5 +1,12 @@
-use actix_web::{web, App, HttpResponse, HttpServer};
+use std::sync::Arc;
+
+use axum::extract::State;
+use axum::http::StatusCode;
+use axum::response::IntoResponse;
+use axum::routing::get;
+use axum::Router;
 use prometheus::{Encoder, Registry, TextEncoder};
+use tokio::net::TcpListener;
 
 use crate::operator::types::RunnerError;
 
@@ -7,36 +14,40 @@ pub struct AppState {
     pub registry: Registry,
 }
 
-pub async fn health() -> HttpResponse {
-    HttpResponse::Ok().json(serde_json::json!({"status": "ok"}))
+async fn health() -> impl IntoResponse {
+    (StatusCode::OK, "{\"status\":\"ok\"}")
 }
 
-pub async fn metrics(data: web::Data<AppState>) -> HttpResponse {
+async fn metrics(State(state): State<Arc<AppState>>) -> impl IntoResponse {
     let encoder = TextEncoder::new();
-    let metric_families = data.registry.gather();
+    let metric_families = state.registry.gather();
     let mut buffer = Vec::new();
 
     if encoder.encode(&metric_families, &mut buffer).is_err() {
-        return HttpResponse::InternalServerError().finish();
+        return (StatusCode::INTERNAL_SERVER_ERROR, Vec::new()).into_response();
     }
 
-    HttpResponse::Ok()
-        .content_type(encoder.format_type())
-        .body(buffer)
+    (
+        StatusCode::OK,
+        [(axum::http::header::CONTENT_TYPE, encoder.format_type())],
+        buffer,
+    )
+        .into_response()
 }
 
 pub async fn start_server(port: u16, registry: Registry) -> Result<(), RunnerError> {
-    let data = web::Data::new(AppState { registry });
+    let state = Arc::new(AppState { registry });
 
-    HttpServer::new(move || {
-        App::new()
-            .app_data(data.clone())
-            .route("/health", web::get().to(health))
-            .route("/metrics", web::get().to(metrics))
-    })
-    .bind(("0.0.0.0", port))
-    .map_err(|e| RunnerError::ExecutionFailed(format!("failed to bind: {e}")))?
-    .run()
-    .await
-    .map_err(|e| RunnerError::ExecutionFailed(format!("server error: {e}")))
+    let app = Router::new()
+        .route("/health", get(health))
+        .route("/metrics", get(metrics))
+        .with_state(state);
+
+    let listener = TcpListener::bind(("0.0.0.0", port))
+        .await
+        .map_err(|e| RunnerError::ExecutionFailed(format!("failed to bind: {e}")))?;
+
+    axum::serve(listener, app)
+        .await
+        .map_err(|e| RunnerError::ExecutionFailed(format!("server error: {e}")))
 }

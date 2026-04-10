@@ -55,16 +55,13 @@ pub async fn run(config: RunnerConfig) -> anyhow::Result<()> {
 
     let scenario_name = config.scenario.to_string();
 
-    // Start metrics server in a dedicated thread (actix is !Send)
+    // Start metrics server as async task
     let server_registry = registry.clone();
     let port = config.metrics_port;
-    let server_handle = std::thread::spawn(move || {
-        let rt = actix_web::rt::System::new();
-        rt.block_on(async {
-            if let Err(e) = crate::runner::server::start_server(port, server_registry).await {
-                tracing::error!(%e, "metrics server error");
-            }
-        });
+    tokio::spawn(async move {
+        if let Err(e) = crate::runner::server::start_server(port, server_registry).await {
+            tracing::error!(%e, "metrics server error");
+        }
     });
 
     metrics.set_active(&config.experiment_id, &scenario_name);
@@ -89,7 +86,7 @@ pub async fn run(config: RunnerConfig) -> anyhow::Result<()> {
 
     metrics.set_inactive(&config.experiment_id, &scenario_name);
 
-    drop(server_handle); // server thread stops when main exits
+    // server task stops when main exits
 
     result.map(|_| ()).map_err(Into::into)
 }

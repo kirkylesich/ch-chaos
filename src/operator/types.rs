@@ -138,6 +138,12 @@ pub enum AnalysisPhase {
     Failed,
 }
 
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+pub enum ImpactType {
+    Direct,
+    Indirect,
+}
+
 // ── Edge target ──
 
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

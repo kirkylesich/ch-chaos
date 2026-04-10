@@ -49,7 +49,40 @@
       "Bash(cargo fmt:*)",
       "mcp__mcp-memory-service__memory_store",
       "Bash(RUST_LOG=info PROMETHEUS_URL=http://localhost:9090 RUNNER_IMAGE=kirill02102/ch-chaos:latest cargo run:*)",
-      "Bash(kill 1240)"
+      "Bash(kill 1240)",
+      "Bash(find ~/.cargo/registry/src -name \"*.rs\" -path \"*kube*\" -exec grep -l \"pub struct Status\" {} \\\\;)",
+      "mcp__drawio__list-paged-model",
+      "mcp__drawio__add-cell-of-shape",
+      "mcp__drawio__add-rectangle",
+      "mcp__drawio__add-edge",
+      "mcp__drawio__delete-cell-by-id",
+      "Bash(wc:*)",
+      "Bash(cargo tree:*)",
+      "mcp__drawio__export-diagram",
+      "Bash(pip3 install:*)",
+      "Bash(brew list:*)",
+      "Bash(brew install:*)",
+      "Bash(pdfinfo \"/Users/kirillyarovoy/Downloads/Яровой Кирилл предзащита.pptx-2 \\(1\\).pdf\")",
+      "Bash(pdftoppm -v)",
+      "Bash(mkdir -p /tmp/preza_slides)",
+      "Bash(pdftoppm -png -r 150 \"/Users/kirillyarovoy/Downloads/Яровой Кирилл предзащита.pptx-2 \\(1\\).pdf\" /tmp/preza_slides/slide)",
+      "Read(//tmp/**)",
+      "Bash(pdftoppm -png -r 300 -f 9 -l 9 \"/Users/kirillyarovoy/Downloads/Яровой Кирилл предзащита.pptx-2 \\(1\\).pdf\" /tmp/preza_slides/slide9_hires)",
+      "Read(//private/tmp/preza_slides/**)",
+      "mcp__mcp-memory-service__memory_list",
+      "mcp__ruflo__system_status",
+      "mcp__mcp-memory-service__memory_stats",
+      "mcp__ruflo__memory_list",
+      "mcp__ruflo__memory_stats",
+      "Read(//Users/kirillyarovoy/**)",
+      "Bash(npx -y @claude-flow/cli@latest --help)",
+      "Bash(npx -y @claude-flow/cli@latest mcp --help)",
+      "Bash(ls -d */)",
+      "Bash(xargs rm:*)"
     ]
-  }
+  },
+  "enableAllProjectMcpServers": true,
+  "enabledMcpjsonServers": [
+    "claude-flow"
+  ]
 }
